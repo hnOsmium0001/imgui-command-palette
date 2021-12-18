@@ -1,5 +1,7 @@
 # ImGui Command Palette
 
+![screenshot1](https://user-images.githubusercontent.com/36975818/146656302-646eccfd-6bf4-4ad0-80e0-239c7766210a.png)
+
 ## About
 This library implements a Sublime Text or VSCode style command palette in ImGui.
 It is provided in the form of a window that you can choose to open/close based on condition (for example, when user pressed the shortcut Ctrl+Shift+P).
