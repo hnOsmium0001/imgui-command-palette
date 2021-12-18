@@ -35,3 +35,5 @@ $ conan install .. -s build_type=Debug
 $ cmake .. -GNinja
 $ ninja
 ```
+
+Note: run the examples with working directory = `${projectFolder}/examples`, since they use relative paths to locate the fonts

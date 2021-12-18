@@ -62,13 +62,19 @@ int main()
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+
     auto& io = ImGui::GetIO();
+    auto regular_font = io.Fonts->AddFontFromFileTTF("fonts/NotoSans-Regular.ttf", 16, nullptr, io.Fonts->GetGlyphRangesDefault());
+    auto bold_font = io.Fonts->AddFontFromFileTTF("fonts/NotoSans-Bold.ttf", 16, nullptr, io.Fonts->GetGlyphRangesDefault());
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     ImGuiCommandPalette::CommandRegistry command_registry;
     ImGuiCommandPalette::CommandPalette command_palette(command_registry);
+
+    command_palette.RegularFont = regular_font;
+    command_palette.HighlightFont = bold_font;
 
     bool show_demo_window = true;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
