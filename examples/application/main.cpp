@@ -78,8 +78,6 @@ int main()
     bool show_custom_command_palette = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    using namespace std::literals::string_literals;
-
     ImCmd::Command toggle_demo_cmd;
     toggle_demo_cmd.Name = "Toggle ImGui demo window";
     toggle_demo_cmd.InitialCallback = [&]() {
@@ -90,10 +88,10 @@ int main()
     ImCmd::Command select_theme_cmd;
     select_theme_cmd.Name = "Select theme";
     select_theme_cmd.InitialCallback = [&]() {
-        ImCmd::Prompt({
-            "Classic"s,
-            "Dark"s,
-            "Light"s,
+        ImCmd::Prompt(std::vector<std::string>{
+            "Classic",
+            "Dark",
+            "Light",
         });
     };
     select_theme_cmd.SubsequentCallback = [&](int selected_option) {

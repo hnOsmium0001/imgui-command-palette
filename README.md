@@ -7,6 +7,7 @@ This library implements a Sublime Text or VSCode style command palette in ImGui.
 It is provided in the form of a window that you can choose to open/close based on condition (for example, when user pressed the shortcut Ctrl+Shift+P).
 
 ## Features
++ Minimum C++ 11
 + Dynamic registration and unregistration of commands
 + Subcommands (prompting a new set of options after user selected a top-level command)
 + Fuzzy search of commands and subcommands
@@ -21,7 +22,7 @@ It is provided in the form of a window that you can choose to open/close based o
 + [ ] Visualization of previously entered options (example: Sublime Merge)
 + [ ] Highlighting of matched characters using unerline
 + [ ] Command history
-+ [ ] Reducing the minimum required C++ version
++ [x] Reducing the minimum required C++ version
 
 ## Usage
 Simply drop all .h and .cpp files in the project root folder to your buildsystem. Minimum of C++17 is required.
