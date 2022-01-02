@@ -27,6 +27,18 @@ struct Command
     std::function<void()> TerminatingCallback;
 };
 
+// Initialization
+struct Context;
+
+/// Create a new context object. If there is currently no context bound, it will also be bound as the current context.
+Context* CreateContext();
+/// Destroys the currently bound context.
+void DestroyContext();
+void DestroyContext(Context* context);
+
+void SetCurrentContext(Context* context);
+Context* GetCurrentContext();
+
 // Command management
 void AddCommand(Command command);
 void RemoveCommand(const char* name);

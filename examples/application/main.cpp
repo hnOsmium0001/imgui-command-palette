@@ -63,6 +63,14 @@ int main()
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 
+	// Note: if you only have one context, simply call ImCmd::CreateContext(); here
+	constexpr int kContextCount = 4;
+	ImCmd::Context* contexts[kContextCount];
+	int current_context = 0;
+	for (int i = 0; i < kContextCount; ++i) {
+		contexts[i] = ImCmd::CreateContext();
+	}
+
     auto& io = ImGui::GetIO();
     auto regular_font = io.Fonts->AddFontFromFileTTF("fonts/NotoSans-Regular.ttf", 16, nullptr, io.Fonts->GetGlyphRangesDefault());
     auto bold_font = io.Fonts->AddFontFromFileTTF("fonts/NotoSans-Bold.ttf", 16, nullptr, io.Fonts->GetGlyphRangesDefault());
@@ -183,6 +191,23 @@ int main()
         }
 
         ImGui::Begin("Config", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+		{
+			char label[] = "Context X";
+			//              ^       ^^
+			// Index:       0       8\ null terminator
+			label[8] = '0' + (current_context + 1);
+
+			if (ImGui::BeginCombo("ImCmd context", label)) {
+				for (int i = 0; i < kContextCount; ++i) {
+					label[8] = '0' + (i + 1);
+					if (ImGui::Selectable(label, current_context == i)) {
+						current_context = i;
+						ImCmd::SetCurrentContext(contexts[i]);
+					}
+				}
+				ImGui::EndCombo();
+			}
+		}
         ImGui::Text("Press Ctrl+Shift+P to bring up the default command palette - CommandPaletteWindow()");
         ImGui::Text("Press Ctrl+Shift+O to bring up a command palette placed inside a custom window - CommandPalette()");
         if (ImGui::Checkbox("Use bold font for highlights", &use_highlight_font)) {
@@ -219,6 +244,15 @@ int main()
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
+
+	// Note: if you only have one context, simply call ImCmd::DestroyContext(); here
+	for (int i = 0; i < kContextCount; ++i) {
+		ImCmd::DestroyContext(contexts[i]);
+		contexts[i] = 0;
+	}
+	// Technically not necessary, kept here for "correctness"
+	ImCmd::SetCurrentContext(nullptr); 
+
     ImGui::DestroyContext();
 
     glfwDestroyWindow(window);

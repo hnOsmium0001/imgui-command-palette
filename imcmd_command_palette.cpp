@@ -26,7 +26,7 @@ class SearchManager;
 struct CommandOperationRegister;
 struct CommandOperationUnregister;
 struct CommandOperation;
-struct Global;
+struct Context;
 
 struct ItemExtraData;
 struct Instance;
@@ -128,8 +128,9 @@ struct CommandOperation
     int Index;
 };
 
-struct Global
+struct Context
 {
+	ImGuiStorage Instances;
     Instance* CurrentCommandPalette = nullptr;
     std::vector<Command> Commands;
     std::vector<CommandOperationRegister> PendingRegisterOps;
@@ -245,8 +246,7 @@ struct Instance
         , Search(*this) {}
 };
 
-static Global gGlobal;
-static ImGuiStorage gInstances;
+static Context* gContext = nullptr;
 
 // =================================================================
 // Private implementation
@@ -257,7 +257,7 @@ int ExecutionManager::GetItemCount() const
     if (m_ExecutingCommand) {
         return static_cast<int>(m_CallStack.back().Options.size());
     } else {
-        return static_cast<int>(gGlobal.Commands.size());
+        return static_cast<int>(gContext->Commands.size());
     }
 }
 
@@ -266,7 +266,7 @@ const char* ExecutionManager::GetItem(int idx) const
     if (m_ExecutingCommand) {
         return m_CallStack.back().Options[idx].c_str();
     } else {
-        return gGlobal.Commands[idx].Name;
+        return gContext->Commands[idx].Name;
     }
 }
 
@@ -283,30 +283,30 @@ void ExecutionManager::SelectItem(int idx)
     auto cmd = m_ExecutingCommand;
     size_t initial_call_stack_height = m_CallStack.size();
     if (cmd == nullptr) {
-        cmd = m_ExecutingCommand = &gGlobal.Commands[idx];
-        ++gGlobal.CommandStorageLocks;
+        cmd = m_ExecutingCommand = &gContext->Commands[idx];
+        ++gContext->CommandStorageLocks;
 
-        gGlobal.IsExecuting = true;
+        gContext->IsExecuting = true;
         InvokeSafe(m_ExecutingCommand->InitialCallback); // Calls ::Prompt()
-        gGlobal.IsExecuting = false;
+        gContext->IsExecuting = false;
     } else {
         m_CallStack.back().SelectedOption = idx;
 
-        gGlobal.IsExecuting = true;
+        gContext->IsExecuting = true;
         InvokeSafe(cmd->SubsequentCallback, idx); // Calls ::Prompt()
-        gGlobal.IsExecuting = false;
+        gContext->IsExecuting = false;
     }
 
     size_t final_call_stack_height = m_CallStack.size();
     if (initial_call_stack_height == final_call_stack_height) {
 
-        gGlobal.IsTerminating = true;
+        gContext->IsTerminating = true;
         InvokeSafe(m_ExecutingCommand->TerminatingCallback); // Shouldn't call ::Prompt()
-        gGlobal.IsTerminating = false;
+        gContext->IsTerminating = false;
 
         m_ExecutingCommand = nullptr;
         m_CallStack.clear();
-        --gGlobal.CommandStorageLocks;
+        --gContext->CommandStorageLocks;
 
         // If the executed command involved subcommands...
         if (final_call_stack_height > 0) {
@@ -314,7 +314,7 @@ void ExecutionManager::SelectItem(int idx)
             m_Instance->CurrentSelectedItem = 0;
         }
 
-        gGlobal.LastCommandPaletteStatus.ItemSelected = true;
+        gContext->LastCommandPaletteStatus.ItemSelected = true;
     } else {
         // Something new is prompted
         // It doesn't make sense for "current selected item" to persists through completely different set of options
@@ -408,77 +408,115 @@ void SearchManager::RefreshSearchResults()
 // API implementation
 // =================================================================
 
+Context* CreateContext()
+{
+	auto ctx = new Context();
+	if (!gContext) {
+		gContext = ctx;
+	}
+	return ctx;
+}
+
+void DestroyContext()
+{
+    DestroyContext(gContext);
+	gContext = nullptr;
+}
+
+void DestroyContext(Context* context)
+{
+	delete context;
+}
+
+void SetCurrentContext(Context* context)
+{
+	gContext = context;
+}
+
+Context* GetCurrentContext()
+{
+	return gContext;
+}
+
 void AddCommand(Command command)
 {
-    if (gGlobal.IsCommandStorageLocked()) {
-        gGlobal.PendingRegisterOps.push_back(CommandOperationRegister{ std::move(command) });
+	IM_ASSERT(gContext != nullptr);
+
+    if (gContext->IsCommandStorageLocked()) {
+        gContext->PendingRegisterOps.push_back(CommandOperationRegister{ std::move(command) });
         CommandOperation op;
         op.Type = CommandOperation::OpType_Register;
-        op.Index = static_cast<int>(gGlobal.PendingRegisterOps.size()) - 1;
-        gGlobal.PendingOps.push_back(op);
+        op.Index = static_cast<int>(gContext->PendingRegisterOps.size()) - 1;
+        gContext->PendingOps.push_back(op);
     } else {
-        gGlobal.RegisterCommand(std::move(command));
+        gContext->RegisterCommand(std::move(command));
     }
 
-    if (auto current = gGlobal.CurrentCommandPalette) {
+    if (auto current = gContext->CurrentCommandPalette) {
         current->PendingActions.RefreshSearch = true;
     }
 }
 
 void RemoveCommand(const char* name)
 {
-    if (gGlobal.IsCommandStorageLocked()) {
-        gGlobal.PendingUnregisterOps.push_back(CommandOperationUnregister{ name });
+	IM_ASSERT(gContext != nullptr);
+
+    if (gContext->IsCommandStorageLocked()) {
+        gContext->PendingUnregisterOps.push_back(CommandOperationUnregister{ name });
         CommandOperation op;
         op.Type = CommandOperation::OpType_Unregister;
-        op.Index = static_cast<int>(gGlobal.PendingUnregisterOps.size()) - 1;
-        gGlobal.PendingOps.push_back(op);
+        op.Index = static_cast<int>(gContext->PendingUnregisterOps.size()) - 1;
+        gContext->PendingOps.push_back(op);
     } else {
-        gGlobal.UnregisterCommand(name);
+        gContext->UnregisterCommand(name);
     }
 
-    if (auto current = gGlobal.CurrentCommandPalette) {
+    if (auto current = gContext->CurrentCommandPalette) {
         current->PendingActions.RefreshSearch = true;
     }
 }
 
 void SetStyleFont(ImCmdTextType type, ImFont* font)
 {
-    gGlobal.Fonts[type] = font;
+    gContext->Fonts[type] = font;
 }
 
 void SetStyleColor(ImCmdTextType type, ImU32 color)
 {
-    gGlobal.FontColors[type] = color;
-    gGlobal.HasFontColorOverride[type] = true;
+    gContext->FontColors[type] = color;
+    gContext->HasFontColorOverride[type] = true;
 }
 
 void ClearStyleColor(ImCmdTextType type)
 {
-    gGlobal.HasFontColorOverride[type] = false;
+    gContext->HasFontColorOverride[type] = false;
 }
 
 void SetNextCommandPaletteSearch(const char* text)
 {
+	IM_ASSERT(gContext != nullptr);
     IM_ASSERT(text != nullptr);
-    gGlobal.NextCommandPaletteActions.NewSearchText = text;
+    gContext->NextCommandPaletteActions.NewSearchText = text;
 }
 
 void SetNextCommandPaletteSearchBoxFocused()
 {
-    gGlobal.NextCommandPaletteActions.FocusSearchBox = true;
+	IM_ASSERT(gContext != nullptr);
+    gContext->NextCommandPaletteActions.FocusSearchBox = true;
 }
 
 void CommandPalette(const char* name)
 {
-    auto& gg = gGlobal;
+	IM_ASSERT(gContext != nullptr);
+
+    auto& gg = *gContext;
     auto& gi = *[&]() {
         auto id = HashCString(name);
-        if (auto ptr = gInstances.GetVoidPtr(id)) {
+        if (auto ptr = gg.Instances.GetVoidPtr(id)) {
             return reinterpret_cast<Instance*>(ptr);
         } else {
             auto instance = new Instance();
-            gInstances.SetVoidPtr(id, instance);
+            gg.Instances.SetVoidPtr(id, instance);
             return instance;
         }
     }();
@@ -693,27 +731,34 @@ void CommandPalette(const char* name)
 
 bool IsAnyItemSelected()
 {
-    return gGlobal.LastCommandPaletteStatus.ItemSelected;
+	IM_ASSERT(gContext != nullptr);
+    return gContext->LastCommandPaletteStatus.ItemSelected;
 }
 
 void RemoveCache(const char* name)
 {
+	IM_ASSERT(gContext != nullptr);
+
+	auto& instances = gContext->Instances;
     auto id = HashCString(name);
-    if (auto ptr = gInstances.GetVoidPtr(id)) {
+    if (auto ptr = instances.GetVoidPtr(id)) {
         auto instance = reinterpret_cast<Instance*>(ptr);
-        gInstances.SetVoidPtr(id, nullptr);
+        instances.SetVoidPtr(id, nullptr);
         delete instance;
     }
 }
 
 void RemoveAllCaches()
 {
-    for (auto& entry : gInstances.Data) {
+	IM_ASSERT(gContext != nullptr);
+
+	auto& instances = gContext->Instances;
+    for (auto& entry : instances.Data) {
         auto instance = reinterpret_cast<Instance*>(entry.val_p);
         entry.val_p = nullptr;
         delete instance;
     }
-    gInstances = {};
+    instances = {};
 }
 
 void SetNextWindowAffixedTop(ImGuiCond cond)
@@ -751,11 +796,12 @@ void CommandPaletteWindow(const char* name, bool* p_open)
 
 void Prompt(std::vector<std::string> options)
 {
-    IM_ASSERT(gGlobal.CurrentCommandPalette != nullptr);
-    IM_ASSERT(gGlobal.IsExecuting);
-    IM_ASSERT(!gGlobal.IsTerminating);
+	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext->CurrentCommandPalette != nullptr);
+    IM_ASSERT(gContext->IsExecuting);
+    IM_ASSERT(!gContext->IsTerminating);
 
-    auto& gi = *gGlobal.CurrentCommandPalette;
+    auto& gi = *gContext->CurrentCommandPalette;
     gi.Session.PushOptions(std::move(options));
 }
 } // namespace ImCmd
