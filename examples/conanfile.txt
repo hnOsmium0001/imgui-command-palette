@@ -1,11 +1,12 @@
 [requires]
 glad/0.1.34
-glfw/3.3.2
+glfw/3.3.6
 imgui/1.85
 
 [generators]
-cmake
+cmake 
 
 [options]
 glad:no_loader=True
+# Generates the APIs for the given version, can handle lower actual runtime OpenGL version as long as we don't use the new APIs
 glad:gl_version=4.5

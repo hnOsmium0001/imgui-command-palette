@@ -130,7 +130,7 @@ struct CommandOperation
 
 struct Context
 {
-	ImGuiStorage Instances;
+    ImGuiStorage Instances;
     Instance* CurrentCommandPalette = nullptr;
     std::vector<Command> Commands;
     std::vector<CommandOperationRegister> PendingRegisterOps;
@@ -410,37 +410,37 @@ void SearchManager::RefreshSearchResults()
 
 Context* CreateContext()
 {
-	auto ctx = new Context();
-	if (!gContext) {
-		gContext = ctx;
-	}
-	return ctx;
+    auto ctx = new Context();
+    if (!gContext) {
+        gContext = ctx;
+    }
+    return ctx;
 }
 
 void DestroyContext()
 {
     DestroyContext(gContext);
-	gContext = nullptr;
+    gContext = nullptr;
 }
 
 void DestroyContext(Context* context)
 {
-	delete context;
+    delete context;
 }
 
 void SetCurrentContext(Context* context)
 {
-	gContext = context;
+    gContext = context;
 }
 
 Context* GetCurrentContext()
 {
-	return gContext;
+    return gContext;
 }
 
 void AddCommand(Command command)
 {
-	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext != nullptr);
 
     if (gContext->IsCommandStorageLocked()) {
         gContext->PendingRegisterOps.push_back(CommandOperationRegister{ std::move(command) });
@@ -459,7 +459,7 @@ void AddCommand(Command command)
 
 void RemoveCommand(const char* name)
 {
-	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext != nullptr);
 
     if (gContext->IsCommandStorageLocked()) {
         gContext->PendingUnregisterOps.push_back(CommandOperationUnregister{ name });
@@ -494,20 +494,20 @@ void ClearStyleColor(ImCmdTextType type)
 
 void SetNextCommandPaletteSearch(const char* text)
 {
-	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext != nullptr);
     IM_ASSERT(text != nullptr);
     gContext->NextCommandPaletteActions.NewSearchText = text;
 }
 
 void SetNextCommandPaletteSearchBoxFocused()
 {
-	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext != nullptr);
     gContext->NextCommandPaletteActions.FocusSearchBox = true;
 }
 
 void CommandPalette(const char* name)
 {
-	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext != nullptr);
 
     auto& gg = *gContext;
     auto& gi = *[&]() {
@@ -731,15 +731,15 @@ void CommandPalette(const char* name)
 
 bool IsAnyItemSelected()
 {
-	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext != nullptr);
     return gContext->LastCommandPaletteStatus.ItemSelected;
 }
 
 void RemoveCache(const char* name)
 {
-	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext != nullptr);
 
-	auto& instances = gContext->Instances;
+    auto& instances = gContext->Instances;
     auto id = HashCString(name);
     if (auto ptr = instances.GetVoidPtr(id)) {
         auto instance = reinterpret_cast<Instance*>(ptr);
@@ -750,9 +750,9 @@ void RemoveCache(const char* name)
 
 void RemoveAllCaches()
 {
-	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext != nullptr);
 
-	auto& instances = gContext->Instances;
+    auto& instances = gContext->Instances;
     for (auto& entry : instances.Data) {
         auto instance = reinterpret_cast<Instance*>(entry.val_p);
         entry.val_p = nullptr;
@@ -796,7 +796,7 @@ void CommandPaletteWindow(const char* name, bool* p_open)
 
 void Prompt(std::vector<std::string> options)
 {
-	IM_ASSERT(gContext != nullptr);
+    IM_ASSERT(gContext != nullptr);
     IM_ASSERT(gContext->CurrentCommandPalette != nullptr);
     IM_ASSERT(gContext->IsExecuting);
     IM_ASSERT(!gContext->IsTerminating);
