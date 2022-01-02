@@ -10,7 +10,10 @@ It is provided in the form of a window that you can choose to open/close based o
 + Dynamic registration and unregistration of commands
 + Subcommands (prompting a new set of options after user selected a top-level command)
 + Fuzzy search of commands and subcommands
-    + Highlighting of matched characters (requires setting a separate font)
+    + Highlighting of matched characters
+        + Option: setting custom font
+        + Option: setting custom text color
+
 
 ## Planned Features
 + [ ] Support for std::string_view

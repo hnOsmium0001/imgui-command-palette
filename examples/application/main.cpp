@@ -70,63 +70,66 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    ImGuiCommandPalette::CommandRegistry command_registry;
-    ImGuiCommandPalette::CommandPalette command_palette(command_registry);
-
-    command_palette.RegularFont = regular_font;
-    command_palette.HighlightFont = bold_font;
+    ImCmd::SetStyleFont(ImCmdTextType_Regular, regular_font);
+    ImCmd::SetStyleFont(ImCmdTextType_Highlight, bold_font);
 
     bool show_demo_window = true;
+    bool show_command_palette = false;
+    bool show_custom_command_palette = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    using ImGuiCommandPalette::Command;
-    using ImGuiCommandPalette::CommandExecutionContext;
     using namespace std::literals::string_literals;
-    command_registry.AddCommand(Command{
-        .Name = "Toggle ImGui demo window",
-        .InitialCallback = [&](CommandExecutionContext& ctx) -> void {
-            show_demo_window = !show_demo_window;
-            ctx.Finish();
-        },
-    });
-    command_registry.AddCommand(Command{
-        .Name = "Select theme",
-        .InitialCallback = [&](CommandExecutionContext& ctx) -> void {
-            ctx.Prompt({
-                "Classic"s,
-                "Dark"s,
-                "Light"s,
-            });
-        },
-        .SubsequentCallback = [&](CommandExecutionContext& ctx, int selected_option) -> void {
-            switch (selected_option) {
-                case 0: ImGui::StyleColorsClassic(); break;
-                case 1: ImGui::StyleColorsDark(); break;
-                case 2: ImGui::StyleColorsLight(); break;
-                default: break;
-            }
-            ctx.Finish();
-        },
-    });
 
-    Command example_command{
-        .Name = "Example command",
+    ImCmd::Command toggle_demo_cmd;
+    toggle_demo_cmd.Name = "Toggle ImGui demo window";
+    toggle_demo_cmd.InitialCallback = [&]() {
+        show_demo_window = !show_demo_window;
     };
-    command_registry.AddCommand(example_command);
-    command_registry.AddCommand(Command{
-        .Name = "Add 'Example command'",
-        .InitialCallback = [&](CommandExecutionContext& ctx) -> void {
-            command_registry.AddCommand(example_command);
-            ctx.Finish();
-        },
-    });
-    command_registry.AddCommand(Command{
-        .Name = "Remove 'Example command'",
-        .InitialCallback = [&](CommandExecutionContext& ctx) -> void {
-            command_registry.RemoveCommand(example_command.Name);
-            ctx.Finish();
-        },
-    });
+    ImCmd::AddCommand(std::move(toggle_demo_cmd));
+
+    ImCmd::Command select_theme_cmd;
+    select_theme_cmd.Name = "Select theme";
+    select_theme_cmd.InitialCallback = [&]() {
+        ImCmd::Prompt({
+            "Classic"s,
+            "Dark"s,
+            "Light"s,
+        });
+    };
+    select_theme_cmd.SubsequentCallback = [&](int selected_option) {
+        switch (selected_option) {
+            case 0: ImGui::StyleColorsClassic(); break;
+            case 1: ImGui::StyleColorsDark(); break;
+            case 2: ImGui::StyleColorsLight(); break;
+            default: break;
+        }
+    };
+    ImCmd::AddCommand(std::move(select_theme_cmd));
+
+    ImCmd::Command example_cmd;
+    example_cmd.Name = "Example command";
+
+    ImCmd::Command add_example_cmd_cmd;
+    add_example_cmd_cmd.Name = "Add 'Example command'";
+    add_example_cmd_cmd.InitialCallback = [&]() {
+        ImCmd::AddCommand(example_cmd);
+    };
+
+    ImCmd::Command remove_example_cmd_cmd;
+    remove_example_cmd_cmd.Name = "Remove 'Example command'";
+    remove_example_cmd_cmd.InitialCallback = [&]() {
+        ImCmd::RemoveCommand(example_cmd.Name);
+    },
+
+    ImCmd::AddCommand(example_cmd); // Copy intentionally
+    ImCmd::AddCommand(std::move(add_example_cmd_cmd));
+    ImCmd::AddCommand(std::move(remove_example_cmd_cmd));
+
+    bool use_highlight_font = true;
+    bool use_highlight_font_color = false;
+    ImVec4 highlight_font_color(1.0f, 0.0f, 0.0f, 1.0f);
+
+    int custom_counter = 0;
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -140,10 +143,70 @@ int main()
         }
 
         if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(GLFW_KEY_P)) {
-            bool visible = command_palette.IsVisible();
-            command_palette.SetVisible(!visible);
+            show_command_palette = !show_command_palette;
         }
-        command_palette.Show("Command Palette");
+        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(GLFW_KEY_O)) {
+            show_custom_command_palette = !show_custom_command_palette;
+        }
+
+        if (show_command_palette) {
+            ImCmd::CommandPaletteWindow("CommandPalette", &show_command_palette);
+        }
+        if (show_custom_command_palette) {
+            ImCmd::SetNextWindowAffixedTop(ImGuiCond_Once);
+            ImGui::SetNextWindowSize(ImVec2(ImGui::GetMainViewport()->Size.x * 0.3f, 0.0f), ImGuiCond_Once);
+            ImGui::Begin("CustomCommandPalette");
+
+            ImGui::Text("Hi! This is a custom label");
+            ImGui::Text("You may also notice that this window has a title bar and is movable - that's also custom");
+
+            ImGui::Separator();
+
+            ImGui::Text("Counter: %d", custom_counter);
+            ImGui::SameLine();
+            if (ImGui::Button("Click me")) {
+                ++custom_counter;
+            }
+
+            // BEGIN command palette widget
+            // Note: see ImCmd::CommandPaletteWindow for all the default behaviors, we've omitted some here
+            if (ImGui::IsWindowAppearing()) {
+                ImCmd::SetNextCommandPaletteSearchBoxFocused();
+            }
+
+            ImCmd::CommandPalette("");
+
+            if (ImCmd::IsAnyItemSelected()) {
+                show_custom_command_palette = false;
+            }
+            // BEGIN command palette widget
+
+            ImGui::End();
+        }
+
+        ImGui::Begin("Config", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::Text("Press Ctrl+Shift+P to bring up the default command palette - CommandPaletteWindow()");
+        ImGui::Text("Press Ctrl+Shift+O to bring up a command palette placed inside a custom window - CommandPalette()");
+        if (ImGui::Checkbox("Use bold font for highlights", &use_highlight_font)) {
+            if (use_highlight_font) {
+                ImCmd::SetStyleFont(ImCmdTextType_Highlight, bold_font);
+            } else {
+                ImCmd::SetStyleFont(ImCmdTextType_Highlight, regular_font);
+            }
+        }
+        if (ImGui::Checkbox("Use color for highlights", &use_highlight_font_color)) {
+            if (use_highlight_font_color) {
+                ImCmd::SetStyleColor(ImCmdTextType_Highlight, ImGui::ColorConvertFloat4ToU32(highlight_font_color));
+            } else {
+                ImCmd::ClearStyleColor(ImCmdTextType_Highlight);
+            }
+        }
+        if (ImGui::ColorEdit3("Highlight color", &highlight_font_color.x)) {
+            if (use_highlight_font_color) {
+                ImCmd::SetStyleColor(ImCmdTextType_Highlight, ImGui::ColorConvertFloat4ToU32(highlight_font_color));
+            }
+        }
+        ImGui::End();
 
         ImGui::Render();
         int display_w, display_h;

@@ -11,92 +11,68 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui_internal.h>
 
-namespace ImGuiCommandPalette
+namespace ImCmd
 {
-void CommandRegistry::AddCommand(Command command)
+// =================================================================
+// Private forward decls
+// =================================================================
+
+struct StackFrame;
+class ExecutionManager;
+
+struct SearchResult;
+class SearchManager;
+
+struct CommandOperationRegister;
+struct CommandOperationUnregister;
+struct CommandOperation;
+struct Global;
+
+struct ItemExtraData;
+struct Instance;
+
+// =================================================================
+// Private interface
+// =================================================================
+
+// TODO we should switch to either ImHashStr in imgui.cpp or std::hash (doesn't support const char* natively, and std::string_view is only available in C++17 or above)
+// Ad-hoc string hash function
+// Adapted from https://stackoverflow.com/a/34597485
+static size_t HashCString(const char* p)
 {
-    auto location = std::lower_bound(
-        m_Commands.begin(),
-        m_Commands.end(),
-        command,
-        [](const Command& a, const Command& b) -> bool {
-            return strcmp(a.Name, b.Name) < 0;
-        });
-    m_Commands.insert(location, std::move(command));
-
-    // TODO invalidate search results
-}
-
-bool CommandRegistry::RemoveCommand(const char* name)
-{
-    struct Comparator
-    {
-        bool operator()(const Command& command, const char* str) const
-        {
-            return strcmp(command.Name, str) < 0;
-        }
-
-        bool operator()(const char* str, const Command& command) const
-        {
-            return strcmp(str, command.Name) < 0;
-        }
-    };
-
-    auto range = std::equal_range(m_Commands.begin(), m_Commands.end(), name, Comparator{});
-    m_Commands.erase(range.first, range.second);
-
-    // TODO invalidate search results
-    return range.first != range.second;
-}
-
-size_t CommandRegistry::GetCommandCount() const
-{
-    return m_Commands.size();
-}
-
-const Command& CommandRegistry::GetCommand(size_t idx) const
-{
-    return m_Commands[idx];
-}
-
-bool CommandExecutionContext::IsInitiated() const
-{
-    return m_Command != nullptr;
-}
-
-const Command* CommandExecutionContext::GetCurrentCommand() const
-{
-    return m_Command;
-}
-
-void CommandExecutionContext::Initiate(const Command& command)
-{
-    if (m_Command == nullptr) {
-        m_Command = &command;
+    size_t result = 0;
+    constexpr size_t kPrime = 31;
+    for (size_t i = 0; p[i] != '\0'; ++i) {
+        result = p[i] + (result * kPrime);
     }
+    return result;
 }
 
-void CommandExecutionContext::Prompt(std::vector<std::string> options)
+struct StackFrame
 {
-    IM_ASSERT(m_Command != nullptr);
-    m_CurrentOptions = std::move(options);
-    ++m_Depth;
-}
+    std::vector<std::string> Options;
+    int SelectedOption = -1;
+};
 
-void CommandExecutionContext::Finish()
+class ExecutionManager
 {
-    IM_ASSERT(m_Command != nullptr);
-    m_Command = nullptr;
-    m_CurrentOptions.clear();
-    m_Depth = 0;
-}
+private:
+    Instance* m_Instance;
+    Command* m_ExecutingCommand = nullptr;
+    std::vector<StackFrame> m_CallStack;
 
-int CommandExecutionContext::GetExecutionDepth() const
-{
-    return m_Depth;
-}
+public:
+    ExecutionManager(Instance& instance)
+        : m_Instance{ &instance } {}
 
-struct CommandPalette::SearchResult
+    int GetItemCount() const;
+    const char* GetItem(int idx) const;
+    void SelectItem(int idx);
+
+    void PushOptions(std::vector<std::string> options);
+};
+
+struct SearchResult
 {
     int ItemIndex;
     int Score;
@@ -104,361 +80,682 @@ struct CommandPalette::SearchResult
     uint8_t Matches[32];
 };
 
-struct CommandPalette::Item
+class SearchManager
 {
-    bool hovered = false;
-    bool held = false;
+private:
+    Instance* m_Instance;
 
-    // Helpers
+public:
+    std::vector<SearchResult> SearchResults;
+    char SearchText[std::numeric_limits<uint8_t>::max() + 1];
 
-    enum ItemType
+public:
+    SearchManager(Instance& instance)
+        : m_Instance{ &instance }
     {
-        CommandItem,
-        CommandOptionItem,
-    };
-
-    enum IndexType
-    {
-        DirectIndex,
-        SearchResultIndex,
-    };
-
-    struct ItemInfo
-    {
-        const char* Text;
-        const Command* AssociatedCommand;
-        int ItemId;
-        ItemType ItemType;
-        IndexType IndexType;
-    };
-
-    static size_t GetItemCount(const CommandPalette& self)
-    {
-        int depth = self.m_ExecutionCtx.GetExecutionDepth();
-        if (depth == 0) {
-            if (self.m_SearchText[0] == '\0') {
-                return self.m_Registry->GetCommandCount();
-            } else {
-                return self.m_SearchResults.size();
-            }
-        } else {
-            if (self.m_SearchText[0] == '\0') {
-                return self.m_ExecutionCtx.m_CurrentOptions.size();
-            } else {
-                return self.m_SearchResults.size();
-            }
-        }
+        std::memset(SearchText, 0, sizeof(SearchText));
     }
 
-    static ItemInfo GetItem(const CommandPalette& self, size_t idx)
-    {
-        ItemInfo option;
+    int GetItemCount() const;
+    const char* GetItem(int idx) const;
 
-        int depth = self.m_ExecutionCtx.GetExecutionDepth();
-        if (depth == 0) {
-            if (self.m_SearchText[0] == '\0') {
-                auto& command = self.m_Registry->GetCommand(idx);
-                option.Text = command.Name;
-                option.AssociatedCommand = &command;
-                option.ItemId = idx;
-                option.IndexType = DirectIndex;
-            } else {
-                auto id = self.m_SearchResults[idx].ItemIndex;
-                auto& command = self.m_Registry->GetCommand(id);
-                option.Text = command.Name;
-                option.AssociatedCommand = &command;
-                option.ItemId = id;
-                option.IndexType = SearchResultIndex;
+    bool IsActive() const;
+
+    void SetSearchText(const char* text);
+    void ClearSearchText();
+    void RefreshSearchResults();
+};
+
+struct CommandOperationRegister
+{
+    Command Candidate;
+};
+
+struct CommandOperationUnregister
+{
+    const char* Name;
+};
+
+struct CommandOperation
+{
+    enum OpType
+    {
+        OpType_Register,
+        OpType_Unregister,
+    };
+
+    OpType Type;
+    int Index;
+};
+
+struct Global
+{
+    Instance* CurrentCommandPalette = nullptr;
+    std::vector<Command> Commands;
+    std::vector<CommandOperationRegister> PendingRegisterOps;
+    std::vector<CommandOperationUnregister> PendingUnregisterOps;
+    std::vector<CommandOperation> PendingOps;
+    ImFont* Fonts[ImCmdTextType_COUNT] = {};
+    ImU32 FontColors[ImCmdTextType_COUNT] = {};
+    int CommandStorageLocks = 0;
+    bool HasFontColorOverride[ImCmdTextType_COUNT] = {};
+    bool IsExecuting = false;
+    bool IsTerminating = false;
+
+    struct
+    {
+        bool ItemSelected = false;
+    } LastCommandPaletteStatus;
+
+    struct
+    {
+        const char* NewSearchText = nullptr;
+        bool FocusSearchBox = false;
+    } NextCommandPaletteActions;
+
+    void RegisterCommand(Command command)
+    {
+        auto location = std::lower_bound(
+            Commands.begin(),
+            Commands.end(),
+            command,
+            [](const Command& a, const Command& b) -> bool {
+                return strcmp(a.Name, b.Name) < 0;
+            });
+        Commands.insert(location, std::move(command));
+    }
+
+    bool UnregisterCommand(const char* name)
+    {
+        struct Comparator
+        {
+            bool operator()(const Command& command, const char* str) const
+            {
+                return strcmp(command.Name, str) < 0;
             }
-            option.ItemType = CommandItem;
-        } else {
-            IM_ASSERT(self.m_ExecutionCtx.GetCurrentCommand() != nullptr);
-            if (self.m_SearchText[0] == '\0') {
-                option.Text = self.m_ExecutionCtx.m_CurrentOptions[idx].c_str();
-                option.AssociatedCommand = self.m_ExecutionCtx.GetCurrentCommand();
-                option.ItemId = idx;
-                option.IndexType = DirectIndex;
-            } else {
-                auto id = self.m_SearchResults[idx].ItemIndex;
-                option.Text = self.m_ExecutionCtx.m_CurrentOptions[id].c_str();
-                option.AssociatedCommand = self.m_ExecutionCtx.GetCurrentCommand();
-                option.ItemId = id;
-                option.IndexType = SearchResultIndex;
+
+            bool operator()(const char* str, const Command& command) const
+            {
+                return strcmp(str, command.Name) < 0;
             }
-            option.ItemType = CommandOptionItem;
+        };
+
+        auto range = std::equal_range(Commands.begin(), Commands.end(), name, Comparator{});
+        Commands.erase(range.first, range.second);
+
+        return range.first != range.second;
+    }
+
+    bool CommitOps()
+    {
+        if (IsCommandStorageLocked()) {
+            return false;
         }
 
-        return option;
+        for (auto& operation : PendingOps) {
+            switch (operation.Type) {
+                case CommandOperation::OpType_Register: {
+                    auto& op = PendingRegisterOps[operation.Index];
+                    RegisterCommand(std::move(op.Candidate));
+                } break;
+
+                case CommandOperation::OpType_Unregister: {
+                    auto& op = PendingUnregisterOps[operation.Index];
+                    UnregisterCommand(op.Name);
+                } break;
+            }
+        }
+
+        bool had_action = !PendingOps.empty();
+        PendingRegisterOps.clear();
+        PendingUnregisterOps.clear();
+        PendingOps.clear();
+
+        return had_action;
+    }
+
+    bool IsCommandStorageLocked() const
+    {
+        return CommandStorageLocks > 0;
     }
 };
 
-CommandPalette::CommandPalette(CommandRegistry& registry)
-    : m_Registry{ &registry }
+struct ItemExtraData
 {
-    memset(m_SearchText, 0, IM_ARRAYSIZE(m_SearchText));
-}
+    bool Hovered = false;
+    bool Held = false;
+};
 
-CommandPalette::~CommandPalette() = default;
-
-void CommandPalette::SelectFocusedItem()
+struct Instance
 {
-    if (m_FocusedItemId < 0 || m_FocusedItemId >= Item::GetItemCount(*this)) {
-        return;
-    }
+    ExecutionManager Session;
+    SearchManager Search;
+    std::vector<ItemExtraData> ExtraData;
 
-    auto selected_item = Item::GetItem(*this, m_FocusedItemId);
-    auto& command = *selected_item.AssociatedCommand;
+    int CurrentSelectedItem = 0;
 
-    auto InvalidateSearchResults = [&]() -> void {
-        memset(m_SearchText, 0, IM_ARRAYSIZE(m_SearchText));
-        m_SearchResults.clear();
-        m_FocusedItemId = 0;
-    };
+    struct
+    {
+        bool RefreshSearch = false;
+        bool ClearSearch = false;
+    } PendingActions;
 
-    int depth = m_ExecutionCtx.GetExecutionDepth();
-    if (depth == 0) {
-        IM_ASSERT(!m_ExecutionCtx.IsInitiated());
+    Instance()
+        : Session(*this)
+        , Search(*this) {}
+};
 
-        m_ExecutionCtx.Initiate(*selected_item.AssociatedCommand);
-        if (command.InitialCallback) {
-            command.InitialCallback(m_ExecutionCtx);
-            // TODO if command adds new commands in the callback, this invalidates `command`, breaking the code later
+static Global gGlobal;
+static ImGuiStorage gInstances;
 
-            m_FocusSearchBox = true;
-            // Don't invalidate search results if no further actions have been requested (returning to global list of commands)
-            if (m_ExecutionCtx.IsInitiated()) {
-                InvalidateSearchResults();
-            }
-        } else {
-            m_ExecutionCtx.Finish();
-        }
+// =================================================================
+// Private implementation
+// =================================================================
+
+int ExecutionManager::GetItemCount() const
+{
+    if (m_ExecutingCommand) {
+        return static_cast<int>(m_CallStack.back().Options.size());
     } else {
-        IM_ASSERT(m_ExecutionCtx.IsInitiated());
-        IM_ASSERT(command.SubsequentCallback);
-        command.SubsequentCallback(m_ExecutionCtx, selected_item.ItemId);
-        // TODO see above note about adding new commands
-
-        m_FocusSearchBox = true;
-        InvalidateSearchResults();
-    }
-
-    // This action terminated execution, close command palette window
-    if (!m_ExecutionCtx.IsInitiated()) {
-        if (command.TerminatingCallback) {
-            command.TerminatingCallback();
-        }
-        m_WindowVisible = false;
+        return static_cast<int>(gGlobal.Commands.size());
     }
 }
 
-bool CommandPalette::IsVisible() const
+const char* ExecutionManager::GetItem(int idx) const
 {
-    return m_WindowVisible;
+    if (m_ExecutingCommand) {
+        return m_CallStack.back().Options[idx].c_str();
+    } else {
+        return gGlobal.Commands[idx].Name;
+    }
 }
 
-void CommandPalette::SetVisible(bool visible)
+template <class... Ts>
+static void InvokeSafe(const std::function<void(Ts...)>& func, Ts... args)
 {
-    // Rising edge
-    if (m_WindowVisible == false && visible == true) { // NOLINT Simplify
-        m_FocusSearchBox = true;
+    if (func) {
+        func(std::forward<Ts>(args)...);
+    }
+}
+
+void ExecutionManager::SelectItem(int idx)
+{
+    auto cmd = m_ExecutingCommand;
+    size_t initial_call_stack_height = m_CallStack.size();
+    if (cmd == nullptr) {
+        cmd = m_ExecutingCommand = &gGlobal.Commands[idx];
+        ++gGlobal.CommandStorageLocks;
+
+        gGlobal.IsExecuting = true;
+        InvokeSafe(m_ExecutingCommand->InitialCallback); // Calls ::Prompt()
+        gGlobal.IsExecuting = false;
+    } else {
+        m_CallStack.back().SelectedOption = idx;
+
+        gGlobal.IsExecuting = true;
+        InvokeSafe(cmd->SubsequentCallback, idx); // Calls ::Prompt()
+        gGlobal.IsExecuting = false;
     }
 
-    m_WindowVisible = visible;
+    size_t final_call_stack_height = m_CallStack.size();
+    if (initial_call_stack_height == final_call_stack_height) {
+
+        gGlobal.IsTerminating = true;
+        InvokeSafe(m_ExecutingCommand->TerminatingCallback); // Shouldn't call ::Prompt()
+        gGlobal.IsTerminating = false;
+
+        m_ExecutingCommand = nullptr;
+        m_CallStack.clear();
+        --gGlobal.CommandStorageLocks;
+
+        // If the executed command involved subcommands...
+        if (final_call_stack_height > 0) {
+            m_Instance->PendingActions.ClearSearch = true;
+            m_Instance->CurrentSelectedItem = 0;
+        }
+
+        gGlobal.LastCommandPaletteStatus.ItemSelected = true;
+    } else {
+        // Something new is prompted
+        // It doesn't make sense for "current selected item" to persists through completely different set of options
+        m_Instance->PendingActions.ClearSearch = true;
+        m_Instance->CurrentSelectedItem = 0;
+    }
 }
 
-void CommandPalette::Show(const char* name, float search_result_window_height)
+void ExecutionManager::PushOptions(std::vector<std::string> options)
 {
-    if (m_WindowVisible) {
-        auto viewport = ImGui::GetMainViewport()->Size;
+    m_CallStack.push_back({});
+    auto& frame = m_CallStack.back();
 
-        // Center window horizontally, align top vertically
-        ImGui::SetNextWindowPos(ImVec2(viewport.x / 2, 0), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-        ImGui::SetNextWindowSize(ImVec2(viewport.x * 0.3f, viewport.y * 0.0f), ImGuiCond_Always);
+    frame.Options = std::move(options);
 
-        ImGui::Begin(name, nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
-        float width = ImGui::GetWindowContentRegionWidth();
+    m_Instance->PendingActions.ClearSearch = true;
+}
 
-        if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
-            // Close popup when user unfocused the command palette window (clicking elsewhere)
-            m_WindowVisible = false;
+int SearchManager::GetItemCount() const
+{
+    return static_cast<int>(SearchResults.size());
+}
+
+const char* SearchManager::GetItem(int idx) const
+{
+    int actualIdx = SearchResults[idx].ItemIndex;
+    return m_Instance->Session.GetItem(actualIdx);
+}
+
+bool SearchManager::IsActive() const
+{
+    return SearchText[0] != '\0';
+}
+
+void SearchManager::SetSearchText(const char* text)
+{
+    // Note: must detect clang first because clang-cl.exe defines both _MSC_VER and __clang__, but only accepts #pragma clang
+#if defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#    pragma warning(push)
+#    pragma warning(disable : 4996)
+#endif
+    // Copy at most IM_ARRAYSIZE(SearchText) chars from `text` to `SearchText`
+    std::strncpy(SearchText, text, IM_ARRAYSIZE(SearchText));
+#if defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#elif defined(__clang__)
+#    pragma clang diagnostic pop
+#elif defined(_MSC_VER)
+#    pragma warning(pop)
+#endif
+    RefreshSearchResults();
+}
+
+void SearchManager::ClearSearchText()
+{
+    std::memset(SearchText, 0, IM_ARRAYSIZE(SearchText));
+    SearchResults.clear();
+}
+
+void SearchManager::RefreshSearchResults()
+{
+    m_Instance->CurrentSelectedItem = 0;
+    SearchResults.clear();
+
+    int item_count = m_Instance->Session.GetItemCount();
+    for (int i = 0; i < item_count; ++i) {
+        const char* text = m_Instance->Session.GetItem(i);
+        SearchResult result;
+        if (FuzzySearch(SearchText, text, result.Score, result.Matches, IM_ARRAYSIZE(result.Matches), result.MatchCount)) {
+            result.ItemIndex = i;
+            SearchResults.push_back(result);
+        }
+    }
+
+    std::sort(
+        SearchResults.begin(),
+        SearchResults.end(),
+        [](const SearchResult& a, const SearchResult& b) -> bool {
+            // We want the biggest element first
+            return a.Score > b.Score;
+        });
+}
+
+// =================================================================
+// API implementation
+// =================================================================
+
+void AddCommand(Command command)
+{
+    if (gGlobal.IsCommandStorageLocked()) {
+        gGlobal.PendingRegisterOps.push_back(CommandOperationRegister{ std::move(command) });
+        CommandOperation op;
+        op.Type = CommandOperation::OpType_Register;
+        op.Index = static_cast<int>(gGlobal.PendingRegisterOps.size()) - 1;
+        gGlobal.PendingOps.push_back(op);
+    } else {
+        gGlobal.RegisterCommand(std::move(command));
+    }
+
+    if (auto current = gGlobal.CurrentCommandPalette) {
+        current->PendingActions.RefreshSearch = true;
+    }
+}
+
+void RemoveCommand(const char* name)
+{
+    if (gGlobal.IsCommandStorageLocked()) {
+        gGlobal.PendingUnregisterOps.push_back(CommandOperationUnregister{ name });
+        CommandOperation op;
+        op.Type = CommandOperation::OpType_Unregister;
+        op.Index = static_cast<int>(gGlobal.PendingUnregisterOps.size()) - 1;
+        gGlobal.PendingOps.push_back(op);
+    } else {
+        gGlobal.UnregisterCommand(name);
+    }
+
+    if (auto current = gGlobal.CurrentCommandPalette) {
+        current->PendingActions.RefreshSearch = true;
+    }
+}
+
+void SetStyleFont(ImCmdTextType type, ImFont* font)
+{
+    gGlobal.Fonts[type] = font;
+}
+
+void SetStyleColor(ImCmdTextType type, ImU32 color)
+{
+    gGlobal.FontColors[type] = color;
+    gGlobal.HasFontColorOverride[type] = true;
+}
+
+void ClearStyleColor(ImCmdTextType type)
+{
+    gGlobal.HasFontColorOverride[type] = false;
+}
+
+void SetNextCommandPaletteSearch(const char* text)
+{
+    IM_ASSERT(text != nullptr);
+    gGlobal.NextCommandPaletteActions.NewSearchText = text;
+}
+
+void SetNextCommandPaletteSearchBoxFocused()
+{
+    gGlobal.NextCommandPaletteActions.FocusSearchBox = true;
+}
+
+void CommandPalette(const char* name)
+{
+    auto& gg = gGlobal;
+    auto& gi = *[&]() {
+        auto id = HashCString(name);
+        if (auto ptr = gInstances.GetVoidPtr(id)) {
+            return reinterpret_cast<Instance*>(ptr);
+        } else {
+            auto instance = new Instance();
+            gInstances.SetVoidPtr(id, instance);
+            return instance;
+        }
+    }();
+
+    float width = ImGui::GetWindowContentRegionWidth();
+    float search_result_window_height = 400.0f; // TODO config
+
+    // BEGIN this command palette
+    gg.CurrentCommandPalette = &gi;
+    ImGui::PushID(name);
+
+    gg.LastCommandPaletteStatus = {};
+
+    // BEGIN processing PendingActions
+    bool refresh_search = gi.PendingActions.RefreshSearch;
+    refresh_search |= gg.CommitOps();
+
+    if (auto text = gg.NextCommandPaletteActions.NewSearchText) {
+        refresh_search = false;
+        if (text[0] == '\0') {
+            gi.Search.ClearSearchText();
+        } else {
+            gi.Search.SetSearchText(text);
+        }
+    } else if (gi.PendingActions.ClearSearch) {
+        refresh_search = false;
+        gi.Search.ClearSearchText();
+    }
+
+    if (refresh_search) {
+        gi.Search.RefreshSearchResults();
+    }
+
+    gi.PendingActions = {};
+    // END procesisng PendingActions
+
+    if (gg.NextCommandPaletteActions.FocusSearchBox) {
+        // Focus the search box when user first brings command palette window up
+        // Note: this only affects the next frame
+        ImGui::SetKeyboardFocusHere(0);
+    }
+    ImGui::SetNextItemWidth(width);
+    if (ImGui::InputText("##SearchBox", gi.Search.SearchText, IM_ARRAYSIZE(gi.Search.SearchText))) {
+        // Search string updated, update search results
+        gi.Search.RefreshSearchResults();
+    }
+
+    ImGui::BeginChild("SearchResults", ImVec2(width, search_result_window_height));
+
+    auto window = ImGui::GetCurrentWindow();
+    auto draw_list = window->DrawList;
+
+    auto font_regular = gg.Fonts[ImCmdTextType_Regular];
+    if (!font_regular) {
+        font_regular = ImGui::GetDrawListSharedData()->Font;
+    }
+    auto font_highlight = gg.Fonts[ImCmdTextType_Highlight];
+    if (!font_highlight) {
+        font_highlight = ImGui::GetDrawListSharedData()->Font;
+    }
+
+    ImU32 text_color_regular;
+    ImU32 text_color_highlight;
+    if (gg.HasFontColorOverride[ImCmdTextType_Regular]) {
+        text_color_regular = gg.FontColors[ImCmdTextType_Regular];
+    } else {
+        text_color_regular = ImGui::GetColorU32(ImGuiCol_Text);
+    }
+    if (gg.HasFontColorOverride[ImCmdTextType_Highlight]) {
+        text_color_highlight = gg.FontColors[ImCmdTextType_Highlight];
+    } else {
+        text_color_highlight = ImGui::GetColorU32(ImGuiCol_Text);
+    }
+
+    auto item_hovered_color = ImGui::GetColorU32(ImGuiCol_HeaderHovered);
+    auto item_active_color = ImGui::GetColorU32(ImGuiCol_HeaderActive);
+    auto item_selected_color = ImGui::GetColorU32(ImGuiCol_Header);
+
+    int item_count;
+    if (gi.Search.IsActive()) {
+        item_count = gi.Search.GetItemCount();
+    } else {
+        item_count = gi.Session.GetItemCount();
+    }
+
+    if (gi.ExtraData.size() < item_count) {
+        gi.ExtraData.resize(item_count);
+    }
+
+    // Flag used to delay item selection until after the loop ends
+    bool select_focused_item = false;
+    for (int i = 0; i < item_count; ++i) {
+        auto id = window->GetID(static_cast<int>(i));
+
+        ImVec2 size{
+            ImGui::GetContentRegionAvailWidth(),
+            ImMax(font_regular->FontSize, font_highlight->FontSize),
+        };
+        ImRect rect{
+            window->DC.CursorPos,
+            window->DC.CursorPos + ImGui::CalcItemSize(size, 0.0f, 0.0f),
+        };
+
+        bool& hovered = gi.ExtraData[i].Hovered;
+        bool& held = gi.ExtraData[i].Held;
+        if (held && hovered) {
+            draw_list->AddRectFilled(rect.Min, rect.Max, item_active_color);
+        } else if (hovered) {
+            draw_list->AddRectFilled(rect.Min, rect.Max, item_hovered_color);
+        } else if (gi.CurrentSelectedItem == i) {
+            draw_list->AddRectFilled(rect.Min, rect.Max, item_selected_color);
         }
 
-        if (m_FocusSearchBox) {
-            m_FocusSearchBox = false;
-            // Focus the search box when user first brings command palette window up
-            // Note: this only affects the next frame
-            ImGui::SetKeyboardFocusHere(0);
-        }
-        ImGui::SetNextItemWidth(width);
-        if (ImGui::InputText("##SearchBox", m_SearchText, IM_ARRAYSIZE(m_SearchText))) {
-            // Search string updated, update search results
+        if (gi.Search.IsActive()) {
+            // Iterating search results: draw text with highlights at matched chars
 
-            m_FocusedItemId = 0;
-            m_SearchResults.clear();
+            auto& search_result = gi.Search.SearchResults[i];
+            auto text = gi.Search.GetItem(i);
 
-            size_t item_count;
-            if (m_ExecutionCtx.GetExecutionDepth() == 0) {
-                item_count = m_Registry->GetCommandCount();
-            } else {
-                item_count = m_ExecutionCtx.m_CurrentOptions.size();
-            }
+            auto text_pos = window->DC.CursorPos;
+            int range_begin;
+            int range_end;
+            int last_range_end = 0;
 
-            for (size_t i = 0; i < item_count; ++i) {
-                const char* text;
-                if (m_ExecutionCtx.GetExecutionDepth() == 0) {
-                    text = m_Registry->GetCommand(i).Name;
-                } else {
-                    text = m_ExecutionCtx.m_CurrentOptions[i].c_str();
-                }
+            auto DrawCurrentRange = [&]() {
+                if (range_begin != last_range_end) {
+                    // Draw normal text between last highlighted range end and current highlighted range start
+                    auto begin = text + last_range_end;
+                    auto end = text + range_begin;
+                    draw_list->AddText(text_pos, text_color_regular, begin, end);
 
-                SearchResult result{
-                    .ItemIndex = (int)i,
-                };
-                if (FuzzySearch(m_SearchText, text, result.Score, result.Matches, IM_ARRAYSIZE(result.Matches), result.MatchCount)) {
-                    m_SearchResults.push_back(result);
-                }
-            }
-
-            std::sort(
-                m_SearchResults.begin(),
-                m_SearchResults.end(),
-                [](const SearchResult& a, const SearchResult& b) -> bool {
-                    // We want the biggest element first
-                    return a.Score > b.Score;
-                });
-        }
-
-        ImGui::BeginChild("SearchResults", ImVec2(width, search_result_window_height));
-
-        auto window = ImGui::GetCurrentWindow();
-        auto& io = ImGui::GetIO();
-
-        auto text_color = ImGui::GetColorU32(ImGuiCol_Text);
-        auto item_hovered_color = ImGui::GetColorU32(ImGuiCol_HeaderHovered);
-        auto item_active_color = ImGui::GetColorU32(ImGuiCol_HeaderActive);
-        auto item_selected_color = ImGui::GetColorU32(ImGuiCol_Header);
-
-        int item_count = Item::GetItemCount(*this);
-        if (m_Items.size() < item_count) {
-            m_Items.resize(item_count);
-        }
-
-        if (!RegularFont) {
-            RegularFont = ImGui::GetDrawListSharedData()->Font;
-        }
-        if (!HighlightFont) {
-            HighlightFont = ImGui::GetDrawListSharedData()->Font;
-        }
-
-        // Flag used to delay item selection until after the loop ends
-        bool select_focused_item = false;
-        for (size_t i = 0; i < item_count; ++i) {
-            auto id = window->GetID(static_cast<int>(i));
-
-            ImVec2 size{
-                ImGui::GetContentRegionAvailWidth(),
-                ImMax(RegularFont->FontSize, HighlightFont->FontSize),
-            };
-            ImRect rect{
-                window->DC.CursorPos,
-                window->DC.CursorPos + ImGui::CalcItemSize(size, 0.0f, 0.0f),
-            };
-
-            bool& hovered = m_Items[i].hovered;
-            bool& held = m_Items[i].held;
-            if (held && hovered) {
-                window->DrawList->AddRectFilled(rect.Min, rect.Max, item_active_color);
-            } else if (hovered) {
-                window->DrawList->AddRectFilled(rect.Min, rect.Max, item_hovered_color);
-            } else if (m_FocusedItemId == i) {
-                window->DrawList->AddRectFilled(rect.Min, rect.Max, item_selected_color);
-            }
-
-            auto item = Item::GetItem(*this, i);
-            if (item.IndexType == Item::SearchResultIndex) {
-                // Iterating search results: draw text with highlights at matched chars
-
-                auto& search_result = m_SearchResults[i];
-                auto text_pos = window->DC.CursorPos;
-                int range_begin;
-                int range_end;
-                int last_range_end = 0;
-
-                auto DrawCurrentRange = [&]() -> void {
-                    if (range_begin != last_range_end) {
-                        // Draw normal text between last highlighted range end and current highlighted range start
-                        auto begin = item.Text + last_range_end;
-                        auto end = item.Text + range_begin;
-                        window->DrawList->AddText(text_pos, text_color, begin, end);
-
-                        auto segment_size = RegularFont->CalcTextSizeA(RegularFont->FontSize, std::numeric_limits<float>::max(), 0.0f, begin, end);
-                        text_pos.x += segment_size.x;
-                    }
-
-                    auto begin = item.Text + range_begin;
-                    auto end = item.Text + range_end;
-                    window->DrawList->AddText(HighlightFont, HighlightFont->FontSize, text_pos, text_color, begin, end);
-
-                    auto segment_size = HighlightFont->CalcTextSizeA(HighlightFont->FontSize, std::numeric_limits<float>::max(), 0.0f, begin, end);
+                    auto segment_size = font_regular->CalcTextSizeA(font_regular->FontSize, std::numeric_limits<float>::max(), 0.0f, begin, end);
                     text_pos.x += segment_size.x;
-                };
-
-                IM_ASSERT(search_result.MatchCount >= 1);
-                range_begin = search_result.Matches[0];
-                range_end = range_begin;
-
-                int last_char_idx = -1;
-                for (int j = 0; j < search_result.MatchCount; ++j) {
-                    int char_idx = search_result.Matches[j];
-
-                    if (char_idx == last_char_idx + 1) {
-                        // These 2 indices are equal, extend our current range by 1
-                        ++range_end;
-                    } else {
-                        DrawCurrentRange();
-                        last_range_end = range_end;
-                        range_begin = char_idx;
-                        range_end = char_idx + 1;
-                    }
-
-                    last_char_idx = char_idx;
                 }
 
-                // Draw the remaining range (if any)
-                if (range_begin != range_end) {
+                auto begin = text + range_begin;
+                auto end = text + range_end;
+                draw_list->AddText(font_highlight, font_highlight->FontSize, text_pos, text_color_highlight, begin, end);
+
+                auto segment_size = font_highlight->CalcTextSizeA(font_highlight->FontSize, std::numeric_limits<float>::max(), 0.0f, begin, end);
+                text_pos.x += segment_size.x;
+            };
+
+            IM_ASSERT(search_result.MatchCount >= 1);
+            range_begin = search_result.Matches[0];
+            range_end = range_begin;
+
+            int last_char_idx = -1;
+            for (int j = 0; j < search_result.MatchCount; ++j) {
+                int char_idx = search_result.Matches[j];
+
+                if (char_idx == last_char_idx + 1) {
+                    // These 2 indices are equal, extend our current range by 1
+                    ++range_end;
+                } else {
                     DrawCurrentRange();
+                    last_range_end = range_end;
+                    range_begin = char_idx;
+                    range_end = char_idx + 1;
                 }
 
-                // Draw the text after the last range (if any)
-                window->DrawList->AddText(text_pos, text_color, item.Text + range_end); // Draw until \0
-            } else {
-                // Iterating everything else: draw text as-is, there is no highlights
-
-                window->DrawList->AddText(window->DC.CursorPos, text_color, item.Text);
+                last_char_idx = char_idx;
             }
 
-            ImGui::ItemSize(rect);
-            if (!ImGui::ItemAdd(rect, id)) {
-                continue;
+            // Draw the remaining range (if any)
+            if (range_begin != range_end) {
+                DrawCurrentRange();
             }
-            if (ImGui::ButtonBehavior(rect, id, &hovered, &held)) {
-                m_FocusedItemId = i;
-                select_focused_item = true;
-            }
+
+            // Draw the text after the last range (if any)
+            draw_list->AddText(text_pos, text_color_regular, text + range_end); // Draw until \0
+        } else {
+            // Iterating everything else: draw text as-is, there is no highlights
+
+            auto text = gi.Session.GetItem(i);
+            auto text_pos = window->DC.CursorPos;
+            draw_list->AddText(text_pos, text_color_regular, text);
         }
 
-        if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_UpArrow))) {
-            m_FocusedItemId = ImMax(m_FocusedItemId - 1, 0);
-        } else if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_DownArrow))) {
-            m_FocusedItemId = ImMin(m_FocusedItemId + 1, item_count - 1);
+        ImGui::ItemSize(rect);
+        if (!ImGui::ItemAdd(rect, id)) {
+            continue;
         }
-        if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Enter)) || select_focused_item) {
-            SelectFocusedItem();
+        if (ImGui::ButtonBehavior(rect, id, &hovered, &held)) {
+            gi.CurrentSelectedItem = i;
+            select_focused_item = true;
         }
+    }
 
-        ImGui::EndChild();
+    if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_UpArrow))) {
+        gi.CurrentSelectedItem = ImMax(gi.CurrentSelectedItem - 1, 0);
+    } else if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_DownArrow))) {
+        gi.CurrentSelectedItem = ImMin(gi.CurrentSelectedItem + 1, item_count - 1);
+    }
+    if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Enter)) || select_focused_item) {
+        if (gi.Search.IsActive() && !gi.Search.SearchResults.empty()) {
+            auto idx = gi.Search.SearchResults[gi.CurrentSelectedItem].ItemIndex;
+            gi.Session.SelectItem(idx);
+        } else {
+            gi.Session.SelectItem(gi.CurrentSelectedItem);
+        }
+    }
 
-        ImGui::End();
+    ImGui::EndChild();
+
+    gg.NextCommandPaletteActions = {};
+
+    ImGui::PopID();
+    gg.CurrentCommandPalette = nullptr;
+    // END this command palette
+}
+
+bool IsAnyItemSelected()
+{
+    return gGlobal.LastCommandPaletteStatus.ItemSelected;
+}
+
+void RemoveCache(const char* name)
+{
+    auto id = HashCString(name);
+    if (auto ptr = gInstances.GetVoidPtr(id)) {
+        auto instance = reinterpret_cast<Instance*>(ptr);
+        gInstances.SetVoidPtr(id, nullptr);
+        delete instance;
     }
 }
-} // namespace ImGuiCommandPalette
+
+void RemoveAllCaches()
+{
+    for (auto& entry : gInstances.Data) {
+        auto instance = reinterpret_cast<Instance*>(entry.val_p);
+        entry.val_p = nullptr;
+        delete instance;
+    }
+    gInstances = {};
+}
+
+void SetNextWindowAffixedTop(ImGuiCond cond)
+{
+    auto viewport = ImGui::GetMainViewport()->Size;
+
+    // Center window horizontally, align top vertically
+    ImGui::SetNextWindowPos(ImVec2(viewport.x / 2, 0), cond, ImVec2(0.5f, 0.0f));
+}
+
+void CommandPaletteWindow(const char* name, bool* p_open)
+{
+    auto viewport = ImGui::GetMainViewport()->Size;
+
+    SetNextWindowAffixedTop();
+    ImGui::SetNextWindowSize(ImVec2(viewport.x * 0.3f, 0.0f));
+    ImGui::Begin(name, nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
+
+    if (ImGui::IsWindowAppearing()) {
+        SetNextCommandPaletteSearchBoxFocused();
+    }
+
+    CommandPalette(name);
+
+    if (IsAnyItemSelected()) {
+        *p_open = false;
+    }
+    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+        // Close popup when user unfocused the command palette window (clicking elsewhere)
+        *p_open = false;
+    }
+
+    ImGui::End();
+}
+
+void Prompt(std::vector<std::string> options)
+{
+    IM_ASSERT(gGlobal.CurrentCommandPalette != nullptr);
+    IM_ASSERT(gGlobal.IsExecuting);
+    IM_ASSERT(!gGlobal.IsTerminating);
+
+    auto& gi = *gGlobal.CurrentCommandPalette;
+    gi.Session.PushOptions(std::move(options));
+}
+} // namespace ImCmd

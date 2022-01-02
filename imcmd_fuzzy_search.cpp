@@ -3,7 +3,7 @@
 #include <cctype>
 #include <cstring>
 
-namespace ImGuiCommandPalette
+namespace ImCmd
 {
 
 namespace
@@ -165,4 +165,4 @@ namespace
         }
     }
 } // namespace
-} // namespace ImGuiCommandPalette
+} // namespace ImCmd

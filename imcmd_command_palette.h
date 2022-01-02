@@ -4,95 +4,52 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <limits>
 #include <string>
 #include <vector>
 
 // TODO support std::string_view
 // TODO support function pointer callback in addition to std::function
 
-namespace ImGuiCommandPalette
+enum ImCmdTextType
 {
+    ImCmdTextType_Regular,
+    ImCmdTextType_Highlight,
+    ImCmdTextType_COUNT,
+};
 
-// Forward declaration
-struct Command;
-class CommandRegistry;
-class CommandExecutionContext;
-class CommandPalette;
-
+namespace ImCmd
+{
 struct Command
 {
     const char* Name;
-    std::function<void(CommandExecutionContext& ctx)> InitialCallback;
-    std::function<void(CommandExecutionContext& ctx, int selected_option)> SubsequentCallback;
+    std::function<void()> InitialCallback;
+    std::function<void(int selected_option)> SubsequentCallback;
     std::function<void()> TerminatingCallback;
 };
 
-class CommandRegistry
-{
-private:
-    std::vector<Command> m_Commands;
+// Command management
+void AddCommand(Command command);
+void RemoveCommand(const char* name);
 
-public:
-    void AddCommand(Command command);
-    bool RemoveCommand(const char* name);
+// Styling
+void SetStyleFont(ImCmdTextType type, ImFont* font);
+void SetStyleColor(ImCmdTextType type, ImU32 color);
+void ClearStyleColor(ImCmdTextType type); //< Clear the style color for the given type, defaulting to ImGuiCol_Text
 
-    size_t GetCommandCount() const;
-    const Command& GetCommand(size_t idx) const;
-};
+// Command palette widget
+void SetNextCommandPaletteSearch(const char* text);
+void SetNextCommandPaletteSearchBoxFocused();
+void CommandPalette(const char* name);
+bool IsAnyItemSelected();
 
-class CommandExecutionContext
-{
-    friend class CommandPalette;
+void RemoveCache(const char* name);
+void RemoveAllCaches();
 
-private:
-    const Command* m_Command = nullptr;
-    std::vector<std::string> m_CurrentOptions;
-    int m_Depth = 0;
+// Command palette widget in a window helper
+void SetNextWindowAffixedTop(ImGuiCond cond = 0);
+void CommandPaletteWindow(const char* name, bool* p_open);
 
-public:
-    const Command* GetCurrentCommand() const;
-    bool IsInitiated() const;
-    void Initiate(const Command& command);
+// Command responses, only call these in command callbacks (except TerminatingCallback)
+void Prompt(std::vector<std::string> options);
 
-    void Prompt(std::vector<std::string> options);
-    void Finish();
-
-    /// Return the number of prompts that the user is currently completing. For example, when the user opens command
-    /// palette fresh and selects a command, 0 is returned. If the command asks some prompt, and then the user selects
-    /// again, 1 is returned.
-    int GetExecutionDepth() const;
-};
-
-class CommandPalette
-{
-public:
-    ImFont* RegularFont = nullptr;
-    ImFont* HighlightFont = nullptr;
-
-private:
-    struct SearchResult;
-    struct Item;
-
-    CommandRegistry* m_Registry;
-    std::vector<SearchResult> m_SearchResults;
-    std::vector<Item> m_Items;
-    CommandExecutionContext m_ExecutionCtx;
-    int m_FocusedItemId = 0;
-    char m_SearchText[std::numeric_limits<uint8_t>::max() + 1];
-    bool m_FocusSearchBox = false;
-    bool m_WindowVisible = false;
-
-public:
-    CommandPalette(CommandRegistry& registry);
-    ~CommandPalette();
-
-    void SelectFocusedItem();
-
-    bool IsVisible() const;
-    void SetVisible(bool visible);
-
-    void Show(const char* name, float search_result_window_height = 400.0f);
-};
-
-} // namespace ImGuiCommandPalette
+} // namespace ImCmd

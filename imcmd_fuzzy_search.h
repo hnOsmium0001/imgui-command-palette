@@ -3,10 +3,10 @@
 
 #include <cstdint>
 
-namespace ImGuiCommandPalette
+namespace ImCmd
 {
 
 bool FuzzySearch(char const* pattern, char const* src, int& outScore);
 bool FuzzySearch(char const* pattern, char const* src, int& outScore, uint8_t matches[], int maxMatches, int& outMatches);
 
-} // namespace ImGuiCommandPalette
+} // namespace ImCmd
