@@ -612,7 +612,7 @@ void CommandPalette(const char* name)
         auto id = window->GetID(static_cast<int>(i));
 
         ImVec2 size{
-            ImGui::GetContentRegionAvailWidth(),
+            ImGui::GetContentRegionAvail().x,
             ImMax(font_regular->FontSize, font_highlight->FontSize),
         };
         ImRect rect{
