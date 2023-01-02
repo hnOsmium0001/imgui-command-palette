@@ -161,7 +161,7 @@ struct Context
             Commands.end(),
             command,
             [](const Command& a, const Command& b) -> bool {
-                return strcmp(a.Name, b.Name) < 0;
+                return strcmp(a.Name.c_str(), b.Name.c_str()) < 0;
             });
         Commands.insert(location, std::move(command));
     }
@@ -172,12 +172,12 @@ struct Context
         {
             bool operator()(const Command& command, const char* str) const
             {
-                return strcmp(command.Name, str) < 0;
+                return strcmp(command.Name.c_str(), str) < 0;
             }
 
             bool operator()(const char* str, const Command& command) const
             {
-                return strcmp(str, command.Name) < 0;
+                return strcmp(str, command.Name.c_str()) < 0;
             }
         };
 
@@ -266,7 +266,7 @@ const char* ExecutionManager::GetItem(int idx) const
     if (m_ExecutingCommand) {
         return m_CallStack.back().Options[idx].c_str();
     } else {
-        return gContext->Commands[idx].Name;
+        return gContext->Commands[idx].Name.c_str();
     }
 }
 
