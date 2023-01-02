@@ -20,12 +20,12 @@ It is provided in the form of a window that you can choose to open/close based o
 + [ ] Support for std::string_view
 + [ ] Support for function pointers instead of std::function
 + [ ] Visualization of previously entered options (example: Sublime Merge)
-+ [ ] Highlighting of matched characters using unerline
++ [ ] Highlighting of matched characters using underline
 + [ ] Command history
 + [x] Reducing the minimum required C++ version
 
 ## Usage
-Simply drop all .h and .cpp files in the project root folder to your buildsystem. Minimum of C++17 is required.
+Simply drop all .h and .cpp files in the project root folder to your buildsystem. Minimum of C++11 is required.
 No external dependencies except Dear ImGui are required.
 
 See the examples for how to use the APIs.
