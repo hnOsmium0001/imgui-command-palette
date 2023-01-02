@@ -4,6 +4,9 @@
 
 #include <imgui.h>
 #include <algorithm>
+// NOTE: we try to use as much ImGui's helpers as possible, in order to reduce
+// work if the end user decide to swap out some standard library functions for
+// their own.
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -34,19 +37,6 @@ struct Instance;
 // =================================================================
 // Private interface
 // =================================================================
-
-// TODO we should switch to either ImHashStr in imgui.cpp or std::hash (doesn't support const char* natively, and std::string_view is only available in C++17 or above)
-// Ad-hoc string hash function
-// Adapted from https://stackoverflow.com/a/34597485
-static size_t HashCString(const char* p)
-{
-    size_t result = 0;
-    constexpr size_t kPrime = 31;
-    for (size_t i = 0; p[i] != '\0'; ++i) {
-        result = p[i] + (result * kPrime);
-    }
-    return result;
-}
 
 struct StackFrame
 {
@@ -87,13 +77,12 @@ private:
 
 public:
     std::vector<SearchResult> SearchResults;
-    char SearchText[std::numeric_limits<uint8_t>::max() + 1];
+    char SearchText[std::numeric_limits<uint8_t>::max() + 1 /* for null terminator */] = {};
 
 public:
     SearchManager(Instance& instance)
         : m_Instance{ &instance }
     {
-        std::memset(SearchText, 0, sizeof(SearchText));
     }
 
     int GetItemCount() const;
@@ -161,7 +150,7 @@ struct Context
             Commands.end(),
             command,
             [](const Command& a, const Command& b) -> bool {
-                return strcmp(a.Name.c_str(), b.Name.c_str()) < 0;
+                return ImStricmp(a.Name.c_str(), b.Name.c_str()) < 0;
             });
         Commands.insert(location, std::move(command));
     }
@@ -172,12 +161,12 @@ struct Context
         {
             bool operator()(const Command& command, const char* str) const
             {
-                return strcmp(command.Name.c_str(), str) < 0;
+                return ImStricmp(command.Name.c_str(), str) < 0;
             }
 
             bool operator()(const char* str, const Command& command) const
             {
-                return strcmp(str, command.Name.c_str()) < 0;
+                return ImStricmp(str, command.Name.c_str()) < 0;
             }
         };
 
@@ -351,31 +340,14 @@ bool SearchManager::IsActive() const
 
 void SearchManager::SetSearchText(const char* text)
 {
-    // Note: must detect clang first because clang-cl.exe defines both _MSC_VER and __clang__, but only accepts #pragma clang
-#if defined(__GNUC__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#elif defined(__clang__)
-#    pragma clang diagnostic push
-#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#elif defined(_MSC_VER)
-#    pragma warning(push)
-#    pragma warning(disable : 4996)
-#endif
     // Copy at most IM_ARRAYSIZE(SearchText) chars from `text` to `SearchText`
-    std::strncpy(SearchText, text, IM_ARRAYSIZE(SearchText));
-#if defined(__GNUC__)
-#    pragma GCC diagnostic pop
-#elif defined(__clang__)
-#    pragma clang diagnostic pop
-#elif defined(_MSC_VER)
-#    pragma warning(pop)
-#endif
+    ImStrncpy(SearchText, text, IM_ARRAYSIZE(SearchText));
     RefreshSearchResults();
 }
 
 void SearchManager::ClearSearchText()
 {
+    // ImGui doesn't have a ImMemset either, they use std::memset too
     std::memset(SearchText, 0, IM_ARRAYSIZE(SearchText));
     SearchResults.clear();
 }
@@ -511,7 +483,7 @@ void CommandPalette(const char* name)
 
     auto& gg = *gContext;
     auto& gi = *[&]() {
-        auto id = HashCString(name);
+        auto id = ImHashStr(name);
         if (auto ptr = gg.Instances.GetVoidPtr(id)) {
             return reinterpret_cast<Instance*>(ptr);
         } else {
@@ -742,7 +714,7 @@ void RemoveCache(const char* name)
     IM_ASSERT(gContext != nullptr);
 
     auto& instances = gContext->Instances;
-    auto id = HashCString(name);
+    auto id = ImHashStr(name);
     if (auto ptr = instances.GetVoidPtr(id)) {
         auto instance = reinterpret_cast<Instance*>(ptr);
         instances.SetVoidPtr(id, nullptr);
