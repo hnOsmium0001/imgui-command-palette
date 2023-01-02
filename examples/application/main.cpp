@@ -124,7 +124,7 @@ int main()
     ImCmd::Command remove_example_cmd_cmd;
     remove_example_cmd_cmd.Name = "Remove 'Example command'";
     remove_example_cmd_cmd.InitialCallback = [&]() {
-        ImCmd::RemoveCommand(example_cmd.Name);
+        ImCmd::RemoveCommand(example_cmd.Name.c_str());
     },
 
     ImCmd::AddCommand(example_cmd); // Copy intentionally
@@ -185,7 +185,7 @@ int main()
             if (ImCmd::IsAnyItemSelected()) {
                 show_custom_command_palette = false;
             }
-            // BEGIN command palette widget
+            // END command palette widget
 
             ImGui::End();
         }
