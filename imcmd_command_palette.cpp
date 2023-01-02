@@ -161,7 +161,7 @@ struct Context
             Commands.end(),
             command,
             [](const Command& a, const Command& b) -> bool {
-                return strcmp(a.Name, b.Name) < 0;
+                return strcmp(a.Name.c_str(), b.Name.c_str()) < 0;
             });
         Commands.insert(location, std::move(command));
     }
@@ -172,12 +172,12 @@ struct Context
         {
             bool operator()(const Command& command, const char* str) const
             {
-                return strcmp(command.Name, str) < 0;
+                return strcmp(command.Name.c_str(), str) < 0;
             }
 
             bool operator()(const char* str, const Command& command) const
             {
-                return strcmp(str, command.Name) < 0;
+                return strcmp(str, command.Name.c_str()) < 0;
             }
         };
 
@@ -266,7 +266,7 @@ const char* ExecutionManager::GetItem(int idx) const
     if (m_ExecutingCommand) {
         return m_CallStack.back().Options[idx].c_str();
     } else {
-        return gContext->Commands[idx].Name;
+        return gContext->Commands[idx].Name.c_str();
     }
 }
 
@@ -654,9 +654,11 @@ void CommandPalette(const char* name)
 
                 auto begin = text + range_begin;
                 auto end = text + range_end;
-                draw_list->AddText(font_highlight, font_highlight->FontSize, text_pos, text_color_highlight, begin, end);
 
-                auto segment_size = font_highlight->CalcTextSizeA(font_highlight->FontSize, std::numeric_limits<float>::max(), 0.0f, begin, end);
+                float fontScale = ImGui::GetIO().FontGlobalScale; // could be 0.5 on macOS Retina, 1 elsewhere
+                draw_list->AddText(font_highlight, font_highlight->FontSize * fontScale, text_pos, text_color_highlight, begin, end);
+                auto segment_size = font_highlight->CalcTextSizeA(font_highlight->FontSize * fontScale, std::numeric_limits<float>::max(), 0.0f, begin, end);
+
                 text_pos.x += segment_size.x;
             };
 

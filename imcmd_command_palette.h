@@ -21,7 +21,7 @@ namespace ImCmd
 {
 struct Command
 {
-    const char* Name;
+    std::string Name;
     std::function<void()> InitialCallback;
     std::function<void(int selected_option)> SubsequentCallback;
     std::function<void()> TerminatingCallback;
