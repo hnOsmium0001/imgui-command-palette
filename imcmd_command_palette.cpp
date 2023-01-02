@@ -4,6 +4,7 @@
 
 #include <imgui.h>
 #include <algorithm>
+#include <cstddef>
 // NOTE: we try to use as much ImGui's helpers as possible, in order to reduce
 // work if the end user decide to swap out some standard library functions for
 // their own.
@@ -127,6 +128,7 @@ struct Context
     std::vector<CommandOperation> PendingOps;
     ImFont* Fonts[ImCmdTextType_COUNT] = {};
     ImU32 FontColors[ImCmdTextType_COUNT] = {};
+    ImU32 FontFlags[ImCmdTextType_COUNT] = {};
     int CommandStorageLocks = 0;
     bool HasFontColorOverride[ImCmdTextType_COUNT] = {};
     bool IsExecuting = false;
@@ -448,19 +450,32 @@ void RemoveCommand(const char* name)
     }
 }
 
+void SetStyleFlag(ImCmdTextType type, ImCmdTextFlag flag, bool enabled)
+{
+    IM_ASSERT(gContext != nullptr);
+    if (enabled) {
+        gContext->FontFlags[type] |= 1 << flag;
+    } else {
+        gContext->FontFlags[type] &= ~(1 << flag);
+    }
+}
+
 void SetStyleFont(ImCmdTextType type, ImFont* font)
 {
+    IM_ASSERT(gContext != nullptr);
     gContext->Fonts[type] = font;
 }
 
 void SetStyleColor(ImCmdTextType type, ImU32 color)
 {
+    IM_ASSERT(gContext != nullptr);
     gContext->FontColors[type] = color;
     gContext->HasFontColorOverride[type] = true;
 }
 
 void ClearStyleColor(ImCmdTextType type)
 {
+    IM_ASSERT(gContext != nullptr);
     gContext->HasFontColorOverride[type] = false;
 }
 
@@ -563,9 +578,15 @@ void CommandPalette(const char* name)
         text_color_highlight = ImGui::GetColorU32(ImGuiCol_Text);
     }
 
+    bool underline_regular = gg.FontFlags[ImCmdTextType_Regular] & (1 << ImCmdTextFlag_Underline);
+    bool underline_highlight = gg.FontFlags[ImCmdTextType_Highlight] & (1 << ImCmdTextFlag_Underline);
+
     auto item_hovered_color = ImGui::GetColorU32(ImGuiCol_HeaderHovered);
     auto item_active_color = ImGui::GetColorU32(ImGuiCol_HeaderActive);
     auto item_selected_color = ImGui::GetColorU32(ImGuiCol_Header);
+
+    // Could be 0.5 on macOS Retina, 1 elsewhere
+    float font_scale = ImGui::GetIO().FontGlobalScale;
 
     int item_count;
     if (gi.Search.IsActive()) {
@@ -618,18 +639,34 @@ void CommandPalette(const char* name)
                     // Draw normal text between last highlighted range end and current highlighted range start
                     auto begin = text + last_range_end;
                     auto end = text + range_begin;
-                    draw_list->AddText(text_pos, text_color_regular, begin, end);
 
+                    draw_list->AddText(text_pos, text_color_regular, begin, end);
                     auto segment_size = font_regular->CalcTextSizeA(font_regular->FontSize, std::numeric_limits<float>::max(), 0.0f, begin, end);
+
+                    if (underline_regular) {
+                        float x1 = text_pos.x;
+                        float x2 = text_pos.x + segment_size.x;
+                        float y = text_pos.y + segment_size.y;
+                        // TODO adjust this to be at text baseline instead
+                        draw_list->AddLine(ImVec2(x1, y), ImVec2(x2, y), text_color_regular);
+                    }
+
                     text_pos.x += segment_size.x;
                 }
 
                 auto begin = text + range_begin;
                 auto end = text + range_end;
 
-                float fontScale = ImGui::GetIO().FontGlobalScale; // could be 0.5 on macOS Retina, 1 elsewhere
-                draw_list->AddText(font_highlight, font_highlight->FontSize * fontScale, text_pos, text_color_highlight, begin, end);
-                auto segment_size = font_highlight->CalcTextSizeA(font_highlight->FontSize * fontScale, std::numeric_limits<float>::max(), 0.0f, begin, end);
+                draw_list->AddText(font_highlight, font_highlight->FontSize * font_scale, text_pos, text_color_highlight, begin, end);
+                auto segment_size = font_highlight->CalcTextSizeA(font_highlight->FontSize * font_scale, std::numeric_limits<float>::max(), 0.0f, begin, end);
+
+                if (underline_highlight) {
+                    float x1 = text_pos.x;
+                    float x2 = text_pos.x + segment_size.x;
+                    float y = text_pos.y + segment_size.y;
+                    // TODO adjust this to be at text baseline instead
+                    draw_list->AddLine(ImVec2(x1, y), ImVec2(x2, y), text_color_highlight);
+                }
 
                 text_pos.x += segment_size.x;
             };

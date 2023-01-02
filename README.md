@@ -20,7 +20,7 @@ It is provided in the form of a window that you can choose to open/close based o
 + [ ] Support for std::string_view
 + [ ] Support for function pointers instead of std::function
 + [ ] Visualization of previously entered options (example: Sublime Merge)
-+ [ ] Highlighting of matched characters using underline
++ [x] Highlighting of matched characters using underline
 + [ ] Command history
 + [x] Reducing the minimum required C++ version
 

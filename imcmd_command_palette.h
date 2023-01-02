@@ -17,6 +17,13 @@ enum ImCmdTextType
     ImCmdTextType_COUNT,
 };
 
+enum ImCmdTextFlag
+{
+    /// Whether the text is underlined. Default false.
+    ImCmdTextFlag_Underline,
+    ImCmdTextFlag_COUNT,
+};
+
 namespace ImCmd
 {
 struct Command
@@ -44,6 +51,7 @@ void AddCommand(Command command);
 void RemoveCommand(const char* name);
 
 // Styling
+void SetStyleFlag(ImCmdTextType type, ImCmdTextFlag flag, bool enabled);
 void SetStyleFont(ImCmdTextType type, ImFont* font);
 void SetStyleColor(ImCmdTextType type, ImU32 color);
 void ClearStyleColor(ImCmdTextType type); //< Clear the style color for the given type, defaulting to ImGuiCol_Text

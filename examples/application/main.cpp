@@ -131,6 +131,7 @@ int main()
     ImCmd::AddCommand(std::move(add_example_cmd_cmd));
     ImCmd::AddCommand(std::move(remove_example_cmd_cmd));
 
+    bool use_highlight_underline = false;
     bool use_highlight_font = true;
     bool use_highlight_font_color = false;
     ImVec4 highlight_font_color(1.0f, 0.0f, 0.0f, 1.0f);
@@ -210,6 +211,9 @@ int main()
         }
         ImGui::Text("Press Ctrl+Shift+P to bring up the default command palette - CommandPaletteWindow()");
         ImGui::Text("Press Ctrl+Shift+O to bring up a command palette placed inside a custom window - CommandPalette()");
+        if (ImGui::Checkbox("Use underline for highlights", &use_highlight_underline)) {
+            ImCmd::SetStyleFlag(ImCmdTextType_Highlight, ImCmdTextFlag_Underline, use_highlight_underline);
+        }
         if (ImGui::Checkbox("Use bold font for highlights", &use_highlight_font)) {
             if (use_highlight_font) {
                 ImCmd::SetStyleFont(ImCmdTextType_Highlight, bold_font);
