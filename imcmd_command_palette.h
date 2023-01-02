@@ -51,8 +51,11 @@ void AddCommand(Command command);
 void RemoveCommand(const char* name);
 
 // Styling
+bool GetStyleFlag(ImCmdTextType type, ImCmdTextFlag flag);
 void SetStyleFlag(ImCmdTextType type, ImCmdTextFlag flag, bool enabled);
+ImFont* GetStyleFont(ImCmdTextType type);
 void SetStyleFont(ImCmdTextType type, ImFont* font);
+ImU32 GetStyleColor(ImCmdTextType type);
 void SetStyleColor(ImCmdTextType type, ImU32 color);
 void ClearStyleColor(ImCmdTextType type); //< Clear the style color for the given type, defaulting to ImGuiCol_Text
 

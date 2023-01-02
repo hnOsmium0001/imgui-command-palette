@@ -126,11 +126,11 @@ struct Context
     std::vector<CommandOperationRegister> PendingRegisterOps;
     std::vector<CommandOperationUnregister> PendingUnregisterOps;
     std::vector<CommandOperation> PendingOps;
-    ImFont* Fonts[ImCmdTextType_COUNT] = {};
-    ImU32 FontColors[ImCmdTextType_COUNT] = {};
-    ImU32 FontFlags[ImCmdTextType_COUNT] = {};
+    ImFont* TextStyleFonts[ImCmdTextType_COUNT] = {};
+    ImU32 TextStyleColors[ImCmdTextType_COUNT] = {};
+    ImU32 TextStyleFlags[ImCmdTextType_COUNT] = {};
     int CommandStorageLocks = 0;
-    bool HasFontColorOverride[ImCmdTextType_COUNT] = {};
+    bool TextStyleHasColorOverride[ImCmdTextType_COUNT] = {};
     bool IsExecuting = false;
     bool IsTerminating = false;
 
@@ -261,8 +261,8 @@ const char* ExecutionManager::GetItem(int idx) const
     }
 }
 
-template <class... Ts>
-static void InvokeSafe(const std::function<void(Ts...)>& func, Ts... args)
+template <class TFunc, class... Ts>
+static void InvokeSafe(const TFunc& func, Ts&&... args)
 {
     if (func) {
         func(std::forward<Ts>(args)...);
@@ -450,33 +450,51 @@ void RemoveCommand(const char* name)
     }
 }
 
+bool GetStyleFlag(ImCmdTextType type, ImCmdTextFlag flag)
+{
+    IM_ASSERT(gContext != nullptr);
+    return gContext->TextStyleFlags[type] & (1 << flag);
+}
+
 void SetStyleFlag(ImCmdTextType type, ImCmdTextFlag flag, bool enabled)
 {
     IM_ASSERT(gContext != nullptr);
     if (enabled) {
-        gContext->FontFlags[type] |= 1 << flag;
+        gContext->TextStyleFlags[type] |= 1 << flag;
     } else {
-        gContext->FontFlags[type] &= ~(1 << flag);
+        gContext->TextStyleFlags[type] &= ~(1 << flag);
     }
+}
+
+ImFont* GetStyleFont(ImCmdTextType type)
+{
+    IM_ASSERT(gContext != nullptr);
+    return gContext->TextStyleFonts[type];
 }
 
 void SetStyleFont(ImCmdTextType type, ImFont* font)
 {
     IM_ASSERT(gContext != nullptr);
-    gContext->Fonts[type] = font;
+    gContext->TextStyleFonts[type] = font;
+}
+
+ImU32 GetStyleColor(ImCmdTextType type)
+{
+    IM_ASSERT(gContext != nullptr);
+    return gContext->TextStyleColors[type];
 }
 
 void SetStyleColor(ImCmdTextType type, ImU32 color)
 {
     IM_ASSERT(gContext != nullptr);
-    gContext->FontColors[type] = color;
-    gContext->HasFontColorOverride[type] = true;
+    gContext->TextStyleColors[type] = color;
+    gContext->TextStyleHasColorOverride[type] = true;
 }
 
 void ClearStyleColor(ImCmdTextType type)
 {
     IM_ASSERT(gContext != nullptr);
-    gContext->HasFontColorOverride[type] = false;
+    gContext->TextStyleHasColorOverride[type] = false;
 }
 
 void SetNextCommandPaletteSearch(const char* text)
@@ -556,30 +574,30 @@ void CommandPalette(const char* name)
     auto window = ImGui::GetCurrentWindow();
     auto draw_list = window->DrawList;
 
-    auto font_regular = gg.Fonts[ImCmdTextType_Regular];
+    auto font_regular = gg.TextStyleFonts[ImCmdTextType_Regular];
     if (!font_regular) {
         font_regular = ImGui::GetDrawListSharedData()->Font;
     }
-    auto font_highlight = gg.Fonts[ImCmdTextType_Highlight];
+    auto font_highlight = gg.TextStyleFonts[ImCmdTextType_Highlight];
     if (!font_highlight) {
         font_highlight = ImGui::GetDrawListSharedData()->Font;
     }
 
     ImU32 text_color_regular;
     ImU32 text_color_highlight;
-    if (gg.HasFontColorOverride[ImCmdTextType_Regular]) {
-        text_color_regular = gg.FontColors[ImCmdTextType_Regular];
+    if (gg.TextStyleHasColorOverride[ImCmdTextType_Regular]) {
+        text_color_regular = gg.TextStyleColors[ImCmdTextType_Regular];
     } else {
         text_color_regular = ImGui::GetColorU32(ImGuiCol_Text);
     }
-    if (gg.HasFontColorOverride[ImCmdTextType_Highlight]) {
-        text_color_highlight = gg.FontColors[ImCmdTextType_Highlight];
+    if (gg.TextStyleHasColorOverride[ImCmdTextType_Highlight]) {
+        text_color_highlight = gg.TextStyleColors[ImCmdTextType_Highlight];
     } else {
         text_color_highlight = ImGui::GetColorU32(ImGuiCol_Text);
     }
 
-    bool underline_regular = gg.FontFlags[ImCmdTextType_Regular] & (1 << ImCmdTextFlag_Underline);
-    bool underline_highlight = gg.FontFlags[ImCmdTextType_Highlight] & (1 << ImCmdTextFlag_Underline);
+    bool underline_regular = gg.TextStyleFlags[ImCmdTextType_Regular] & (1 << ImCmdTextFlag_Underline);
+    bool underline_highlight = gg.TextStyleFlags[ImCmdTextType_Highlight] & (1 << ImCmdTextFlag_Underline);
 
     auto item_hovered_color = ImGui::GetColorU32(ImGuiCol_HeaderHovered);
     auto item_active_color = ImGui::GetColorU32(ImGuiCol_HeaderActive);
