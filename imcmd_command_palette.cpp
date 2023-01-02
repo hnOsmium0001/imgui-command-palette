@@ -654,9 +654,11 @@ void CommandPalette(const char* name)
 
                 auto begin = text + range_begin;
                 auto end = text + range_end;
-                draw_list->AddText(font_highlight, font_highlight->FontSize, text_pos, text_color_highlight, begin, end);
 
-                auto segment_size = font_highlight->CalcTextSizeA(font_highlight->FontSize, std::numeric_limits<float>::max(), 0.0f, begin, end);
+                float fontScale = ImGui::GetIO().FontGlobalScale; // could be 0.5 on macOS Retina, 1 elsewhere
+                draw_list->AddText(font_highlight, font_highlight->FontSize * fontScale, text_pos, text_color_highlight, begin, end);
+                auto segment_size = font_highlight->CalcTextSizeA(font_highlight->FontSize * fontScale, std::numeric_limits<float>::max(), 0.0f, begin, end);
+
                 text_pos.x += segment_size.x;
             };
 
