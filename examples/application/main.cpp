@@ -149,10 +149,10 @@ int main()
             ImGui::ShowDemoWindow(&show_demo_window);
         }
 
-        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(GLFW_KEY_P)) {
+        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_P)) {
             show_command_palette = !show_command_palette;
         }
-        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(GLFW_KEY_O)) {
+        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_O)) {
             show_custom_command_palette = !show_custom_command_palette;
         }
 
