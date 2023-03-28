@@ -742,7 +742,7 @@ void CommandPalette(const char* name)
     }
     if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Enter)) || select_focused_item) {
         if(!gi.Search.GetItemCount() || gi.Search.SearchResults.empty()){
-            // aEssentially don't execute any commands.
+            // Essentially don't execute any commands.
         }else if (gi.Search.IsActive() && !gi.Search.SearchResults.empty()) {
             auto idx = gi.Search.SearchResults[gi.CurrentSelectedItem].ItemIndex;
             gi.Session.SelectItem(idx);
