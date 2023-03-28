@@ -273,6 +273,11 @@ void ExecutionManager::SelectItem(int idx)
 {
     auto cmd = m_ExecutingCommand;
     size_t initial_call_stack_height = m_CallStack.size();
+
+    // Guarding aginst invalid index.
+    if(idx >= m_CallStack.size()) return;
+    IM_ASSERT(idx < m_CallStack.size());
+
     if (cmd == nullptr) {
         cmd = m_ExecutingCommand = &gContext->Commands[idx];
         ++gContext->CommandStorageLocks;
@@ -741,9 +746,7 @@ void CommandPalette(const char* name)
         gi.CurrentSelectedItem = ImMin(gi.CurrentSelectedItem + 1, item_count - 1);
     }
     if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Enter)) || select_focused_item) {
-        if(!gi.Search.GetItemCount() || gi.Search.SearchResults.empty()){
-            // Essentially don't execute any commands.
-        }else if (gi.Search.IsActive() && !gi.Search.SearchResults.empty()) {
+        if (gi.Search.IsActive() && !gi.Search.SearchResults.empty()) {
             auto idx = gi.Search.SearchResults[gi.CurrentSelectedItem].ItemIndex;
             gi.Session.SelectItem(idx);
         } else {
