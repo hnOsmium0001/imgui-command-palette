@@ -275,7 +275,7 @@ void ExecutionManager::SelectItem(int idx)
     size_t initial_call_stack_height = m_CallStack.size();
 
     // Guarding aginst invalid index.
-    if(idx >= gContext->Commands.size()) return;
+    if (idx >= gContext->Commands.size()) return;
     IM_ASSERT(idx < gContext->Commands.size());
 
     if (cmd == nullptr) {
