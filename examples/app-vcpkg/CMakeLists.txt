@@ -14,11 +14,11 @@ add_library(imcmd
     "${IMCMD_SRC_DIR}/imcmd_fuzzy_search.cpp"
 )
 target_compile_features(imcmd PUBLIC cxx_std_11)
+target_include_directories(imcmd PUBLIC ${IMCMD_SRC_DIR})
 target_link_libraries(imcmd PUBLIC imgui::imgui)
 
 add_executable(imcmd-demo
     "${DEMO_SRC_DIR}/main.cpp"
 )
 target_compile_features(imcmd-demo PRIVATE cxx_std_11)
-target_include_directories(imcmd-demo PRIVATE ${IMCMD_SRC_DIR})
 target_link_libraries(imcmd-demo PRIVATE imcmd glfw imgui::imgui)
