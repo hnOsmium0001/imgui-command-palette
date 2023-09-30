@@ -1,19 +1,20 @@
-#include "imcmd_command_palette.h"
-
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-#include <glad/glad.h>
+#include <imcmd_command_palette.h>
 #include <imgui.h>
-#include <iostream>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 #include <string>
 
-#include <../res/bindings/imgui_impl_glfw.h>
-#include <../res/bindings/imgui_impl_opengl3.h>
-
-#define IMGUI_IMPL_OPENGL_LOADER_CUSTOM
-#include <../res/bindings/imgui_impl_glfw.cpp>
-#include <../res/bindings/imgui_impl_opengl3.cpp>
+// A note on OpenGL functions:
+//
+// We only use the functions present in OpenGL 1.1 in this file (like glClear and glViewport) to setup the window, thus we COULD be using system headers dragged in glfw3.h.
+// But since they are concrete function definitions, we'd still need to link to the dll of each platform -- by using find_package(OpenGL) + target_link_libraries() in CMake which is quite a bit more stuff to add to the buildsystem.
+// As such we just use imgui_impl_opengl3_loader.h instead of the system headers.
+//
+// This is _technically_ not supported per comments in imgui_impl_opengl3_loader.h, but since we're explicitly not using other loaders + vendoring imgui anyways, it's fine for our purposes.
+#include <imgui_impl_opengl3_loader.h>
 
 static void GlfwErrorCallback(int error, const char* description)
 {
@@ -55,10 +56,6 @@ int main()
     }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        return -3;
-    }
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -131,7 +128,6 @@ int main()
     ImCmd::AddCommand(std::move(add_example_cmd_cmd));
     ImCmd::AddCommand(std::move(remove_example_cmd_cmd));
 
-    bool use_highlight_underline = false;
     bool use_highlight_font = true;
     bool use_highlight_font_color = false;
     ImVec4 highlight_font_color(1.0f, 0.0f, 0.0f, 1.0f);
@@ -186,7 +182,7 @@ int main()
             if (ImCmd::IsAnyItemSelected()) {
                 show_custom_command_palette = false;
             }
-            // END command palette widget
+            // BEGIN command palette widget
 
             ImGui::End();
         }
@@ -211,9 +207,6 @@ int main()
         }
         ImGui::Text("Press Ctrl+Shift+P to bring up the default command palette - CommandPaletteWindow()");
         ImGui::Text("Press Ctrl+Shift+O to bring up a command palette placed inside a custom window - CommandPalette()");
-        if (ImGui::Checkbox("Use underline for highlights", &use_highlight_underline)) {
-            ImCmd::SetStyleFlag(ImCmdTextType_Highlight, ImCmdTextFlag_Underline, use_highlight_underline);
-        }
         if (ImGui::Checkbox("Use bold font for highlights", &use_highlight_font)) {
             if (use_highlight_font) {
                 ImCmd::SetStyleFont(ImCmdTextType_Highlight, bold_font);

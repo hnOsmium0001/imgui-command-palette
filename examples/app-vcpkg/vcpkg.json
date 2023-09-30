@@ -1,0 +1,12 @@
+{
+	"name": "imgui-command-palette-demo",
+	"version": "1.0.0",
+	"builtin-baseline": "c6d6efed3e9b4242765bfe1b5c5befffd85f7b92",
+	"dependencies": [
+		"glfw3",
+        {
+            "name": "imgui",
+            "features": ["glfw-binding", "opengl3-binding"]
+        }
+	]
+}
