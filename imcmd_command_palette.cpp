@@ -1,8 +1,12 @@
-#include "imcmd_command_palette.h"
+// NOTE: we are putting these at the top, so that IMGUI_DEFINE_MATH_OPERATORS can correctly propagate for this translation unit
+// NOTE: imgui marks the operators as `static`, so there are no ODR violations here
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include <imgui.h>
+#include <imgui_internal.h>
 
+#include "imcmd_command_palette.h"
 #include "imcmd_fuzzy_search.h"
 
-#include <imgui.h>
 #include <algorithm>
 #include <cstddef>
 // NOTE: we try to use as much ImGui's helpers as possible, in order to reduce
@@ -11,9 +15,6 @@
 #include <cstring>
 #include <limits>
 #include <utility>
-
-#define IMGUI_DEFINE_MATH_OPERATORS
-#include <imgui_internal.h>
 
 namespace ImCmd
 {
@@ -576,7 +577,7 @@ void CommandPalette(const char* name)
 
     ImGui::BeginChild("SearchResults", ImVec2(width, search_result_window_height));
 
-    auto window = ImGui::GetCurrentWindow();
+    auto window = ImGui::GetCurrentContext()->CurrentWindow;
     auto draw_list = window->DrawList;
 
     auto font_regular = gg.TextStyleFonts[ImCmdTextType_Regular];
