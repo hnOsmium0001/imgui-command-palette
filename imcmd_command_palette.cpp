@@ -532,7 +532,7 @@ void CommandPalette(const char* name)
         }
     }();
 
-    float width = ImGui::GetWindowContentRegionWidth();
+    float width = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
     float search_result_window_height = 400.0f; // TODO config
 
     // BEGIN this command palette
