@@ -109,6 +109,25 @@ int main()
     };
     ImCmd::AddCommand(std::move(select_theme_cmd));
 
+    ImCmd::Command nested_options_cmd;
+    nested_options_cmd.Name = "Nested";
+    nested_options_cmd.InitialCallback = [&]() {
+        ImCmd::Prompt(std::vector<std::string>{ "Option 1", "Option 2", "Option 3" });
+    };
+    int last_id = -1; // Workaround for lack of C++14 captures
+    nested_options_cmd.SubsequentCallback = [&last_id](int selected_option) {
+        if (last_id == -1) {
+            last_id = selected_option;
+            ImCmd::Prompt({
+                "Option " + std::to_string(selected_option + 1) + ".1",
+                "Option " + std::to_string(selected_option + 1) + ".2",
+            });
+        } else {
+            last_id = -1;
+        }
+    };
+    ImCmd::AddCommand(std::move(nested_options_cmd));
+
     ImCmd::Command example_cmd;
     example_cmd.Name = "Example command";
 
