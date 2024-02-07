@@ -626,6 +626,11 @@ void CommandPalette(const char* name)
     // Flag used to delay item selection until after the loop ends
     bool select_focused_item = false;
     for (int i = 0; i < item_count; ++i) {
+        // Implement a custom button-like control
+
+        // We are doing this so that it can be highlighted without losing focus on the ImGui::InputText,
+        // allowing the user to naviage with up/down arrow keys while typing.
+
         auto id = window->GetID(static_cast<int>(i));
 
         ImVec2 size{
